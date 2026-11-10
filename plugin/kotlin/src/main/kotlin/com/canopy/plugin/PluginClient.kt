@@ -55,6 +55,14 @@ class PluginClient(
     /** The plugin's configured RPC listen address (used by the custom RPC server). */
     val rpcAddress: String get() = config.rpcAddress
 
+    /**
+     * The typed, validated form of the opaque pluginConfig the node forwarded at handshake. It is
+     * populated in [handshake] and read by handlers (e.g. the tutorial faucet reads
+     * `plugin.settings.faucetAmount`). Defaults to zero settings until the handshake completes.
+     */
+    var settings: PluginSettings = PluginSettings()
+        private set
+
     private var fsmConfig: PluginFSMConfig? = null
     private var socket: AFUNIXSocket? = null
     private var inputStream: DataInputStream? = null
@@ -119,6 +127,10 @@ class PluginClient(
         when {
             response.hasConfig() -> {
                 fsmConfig = response.config
+                // decode + validate the opaque pluginConfig the node forwarded from its config.json.
+                // This is the 'expected form' check: a malformed blob throws here and fails startup.
+                settings = parsePluginConfig(response.config.pluginConfig.toByteArray())
+                logger.info { "Loaded pluginConfig: faucetAmount=${settings.faucetAmount}" }
                 logger.info { "Handshake complete" }
             }
             response.hasError() -> {

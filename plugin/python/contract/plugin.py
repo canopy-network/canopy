@@ -37,6 +37,7 @@ from .error import (
     err_invalid_plugin_resp_id,
     err_unexpected_fsm_to_plugin,
     err_invalid_fsm_to_plugin_message,
+    err_invalid_plugin_config,
 )
 from .contract import Contract, CONTRACT_CONFIG
 
@@ -57,6 +58,10 @@ class Config:
     data_dir_path: str = "/tmp/plugin/"
     # rpc_address is the listen address for the plugin's own HTTP server that exposes custom RPC endpoints
     rpc_address: str = "0.0.0.0:50010"
+    # plugin_config is an opaque, plugin-defined configuration value (any JSON). It mirrors the node
+    # config.json `pluginConfig` field; Canopy forwards that value to the plugin at handshake, and the
+    # plugin decodes + validates it into its own expected shape (see PluginSettings) at startup.
+    plugin_config: Any = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.chain_id, int) or self.chain_id < 1:
@@ -65,9 +70,46 @@ class Config:
             raise ValueError(f"Invalid data_dir_path: {self.data_dir_path}")
 
 
+@dataclass
+class PluginSettings:
+    """Typed, validated shape the plugin expects the opaque `pluginConfig` to take.
+
+    Keeping `pluginConfig` as free-form JSON on the wire lets each plugin define its own schema while
+    still failing fast at startup if the operator supplied something malformed. Mirrors Go's
+    PluginSettings.
+    """
+    # faucet_amount is the fixed amount (in uCNPY) minted per faucet transaction. It is operator
+    # controlled via config.json `pluginConfig.faucetAmount` rather than being supplied per request
+    # over RPC, so the node operator — not the caller — decides how much the faucet dispenses.
+    faucet_amount: int = 0
+
+
+def parse_plugin_config(raw: bytes) -> PluginSettings:
+    """Decode the opaque pluginConfig (raw JSON forwarded from the node's config.json) into the
+    plugin's expected PluginSettings shape and validate it.
+
+    This is the single place where the plugin asserts the operator-supplied blob is "in the expected
+    form"; it is called once at startup. A missing/empty pluginConfig yields zero settings so the base
+    plugin still starts; a malformed blob raises a PluginError. Mirrors Go's ParsePluginConfig.
+    """
+    settings = PluginSettings()
+    # a missing pluginConfig is treated as empty settings so the base plugin still starts
+    if not raw:
+        return settings
+    # the blob must be a well-formed JSON object matching PluginSettings
+    try:
+        data = json.loads(raw)
+    except (ValueError, TypeError) as err:
+        raise err_invalid_plugin_config(str(err))
+    if not isinstance(data, dict):
+        raise err_invalid_plugin_config("expected a JSON object")
+    settings.faucet_amount = int(data.get("faucetAmount", 0) or 0)
+    return settings
+
+
 def default_config() -> Config:
     """Return the default configuration (matching Go's DefaultConfig)."""
-    return Config(chain_id=1, data_dir_path="/tmp/plugin/", rpc_address="0.0.0.0:50010")
+    return Config(chain_id=1, data_dir_path="/tmp/plugin/", rpc_address="0.0.0.0:50010", plugin_config=None)
 
 
 def new_config_from_file(filepath: str) -> Config:
@@ -78,6 +120,7 @@ def new_config_from_file(filepath: str) -> Config:
             chain_id=config_data.get("chainId", 1),
             data_dir_path=config_data.get("dataDirPath", "/tmp/plugin/"),
             rpc_address=config_data.get("rpcAddress", "0.0.0.0:50010"),
+            plugin_config=config_data.get("pluginConfig", None),
         )
     except Exception as err:
         raise ValueError(f"Failed to load config from {filepath}: {err}")
@@ -110,6 +153,8 @@ class Plugin:
         self.config = config
         self.fsm_config: Optional[PluginFSMConfig] = None
         self.plugin_config = PluginConfig()
+        # settings is the typed, validated form of the opaque pluginConfig (set at handshake)
+        self.settings = PluginSettings()
         self._reader: Optional[asyncio.StreamReader] = None
         self._writer: Optional[asyncio.StreamWriter] = None
         self._pending: Dict[int, asyncio.Future] = {}
@@ -459,6 +504,15 @@ class Plugin:
             if msg.HasField("config"):
                 logger.info("Received FSM config response")
                 self.fsm_config = msg.config
+                # decode + validate the opaque pluginConfig the node forwarded from its config.json.
+                # This is the 'expected form' check: a malformed blob fails the handshake and the
+                # plugin exits (fail fast), mirroring Go's StartPlugin log.Fatal on a bad pluginConfig.
+                try:
+                    self.settings = parse_plugin_config(msg.config.plugin_config)
+                except PluginError as cfg_err:
+                    logger.error(f"invalid pluginConfig, cannot start plugin: {cfg_err}")
+                    os._exit(1)
+                logger.info(f"Loaded pluginConfig: faucetAmount={self.settings.faucet_amount}")
                 return  # No response needed
 
             elif msg.HasField("genesis"):

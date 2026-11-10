@@ -38,13 +38,13 @@ message MessageReward {
 
 // MessageFaucet is a test-only transaction that mints tokens to any address
 // No balance check required - just mints tokens for testing purposes
+// NOTE: there is intentionally NO `amount` field. The minted amount is operator-controlled via
+// config.json `pluginConfig.faucetAmount` (see Step 6b), not supplied per-transaction over RPC.
 message MessageFaucet {
   // signer_address: the address signing this transaction (for auth)
   bytes signer_address = 1; // @gotags: json:"signerAddress"
   // recipient_address: who receives the tokens
   bytes recipient_address = 2; // @gotags: json:"recipientAddress"
-  // amount: tokens to mint
-  uint64 amount = 3;
 }
 ```
 
@@ -143,13 +143,8 @@ CheckMessageFaucet(msg: any): any {
         return { error: ErrInvalidAddress() };
     }
 
-    // Validate amount - must be greater than zero.
-    // Protobuf uint64 values may come as Long objects or numbers, so handle both.
-    // Long.isLong() checks if it's a Long object, then use .isZero() method.
-    const amount = msg.amount as Long | number | undefined;
-    if (!amount || (Long.isLong(amount) ? amount.isZero() : amount === 0)) {
-        return { error: ErrInvalidAmount() };
-    }
+    // NOTE: there is no amount to validate here — the faucet mints a fixed, operator-controlled
+    // amount (pluginConfig.faucetAmount), which is validated once at startup (see Step 6b).
 
     // Return the successful check response:
     // - recipient: who receives funds (used for indexing/notifications)
@@ -264,7 +259,8 @@ The faucet transaction mints tokens without requiring the signer to have any bal
  * Faucet is special: it mints tokens without requiring any existing balance (for testing).
  * 
  * @param contract - The contract instance with plugin connection and config
- * @param msg - The faucet message containing recipientAddress and amount
+ * @param msg - The faucet message containing recipientAddress (the minted amount is NOT in the
+ *              message; it comes from the operator-controlled pluginConfig.faucetAmount)
  * @returns Promise resolving to empty object on success, or error object
  */
 static async DeliverMessageFaucet(contract: Contract, msg: any): Promise<any> {
@@ -318,13 +314,14 @@ static async DeliverMessageFaucet(contract: Contract, msg: any): Promise<any> {
     const recipient = recipientRaw as any;
 
     // CORE LOGIC: Add the faucet amount to the recipient's balance.
-    // Handle both Long and number types from protobuf deserialization.
-    // Long.isLong() checks the type, then we normalize to Long for arithmetic.
-    const msgAmount = Long.isLong(msg.amount) ? msg.amount : Long.fromNumber(msg.amount as number || 0);
+    // The amount is NOT taken from the message; it comes from the operator-controlled
+    // pluginConfig.faucetAmount, decoded + validated once at startup (see Step 6b) and stored on
+    // the plugin as `settings`. Normalize to Long for arithmetic.
+    const faucetAmount = Long.fromNumber(contract.plugin.settings?.faucetAmount ?? 0);
     const recipientAmount = Long.isLong(recipient?.amount) ? recipient.amount : Long.fromNumber(recipient?.amount as number || 0);
     // This is where tokens are "minted" - we simply increase the balance.
     // No balance check needed because faucet creates tokens from nothing.
-    const newRecipientAmount = recipientAmount.add(msgAmount);
+    const newRecipientAmount = recipientAmount.add(faucetAmount);
 
     // Create updated account object with the new balance.
     // types.Account.create() builds a properly structured protobuf message.
@@ -734,6 +731,83 @@ curl 'http://localhost:50010/v1/query/rewards?height=42'
 curl 'http://localhost:50010/v1/query/rewards?address=<recipient-hex>'
 ```
 
+## Step 6b: Configure the faucet amount via `pluginConfig`
+
+The faucet amount is **operator-controlled**, not supplied per-transaction. It is read from the
+node's `config.json` `pluginConfig` field, which Canopy forwards verbatim to the plugin during the
+handshake. `pluginConfig` is intentionally typed as *any* JSON on the node side, so each plugin can
+define its own schema and validate it at startup.
+
+### How it flows
+
+1. **Node config** (`~/.canopy/config.json`) carries an opaque `pluginConfig` JSON value:
+
+   ```json
+   {
+     "plugin": "typescript",
+     "pluginConfig": { "faucetAmount": 1000000000 }
+   }
+   ```
+
+2. **Canopy core** (`lib/config.go` `MainConfig.PluginConfig`) reads it as raw JSON and forwards it
+   to the plugin in the handshake response (`PluginFSMConfig.plugin_config`). Core never inspects it.
+
+3. **The plugin** decodes + validates it at startup. The base SDK (`src/contract/plugin.ts`) defines
+   the expected shape and the single validation entry point:
+
+   ```typescript
+   // Config gains an opaque pluginConfig field (any JSON)
+   export interface Config {
+       ChainId: number;
+       DataDirPath: string;
+       rpcAddress: string;
+       pluginConfig?: unknown;
+   }
+
+   // PluginSettings is the typed, validated shape the plugin expects
+   export interface PluginSettings {
+       faucetAmount: number;
+   }
+
+   // parsePluginConfig decodes + validates the forwarded JSON at startup; a malformed blob fails
+   // the handshake (and the plugin exits), satisfying "validate it is in the expected form".
+   export function parsePluginConfig(
+       raw: Uint8Array | null | undefined
+   ): [PluginSettings | null, IPluginError | null] { ... }
+   ```
+
+   `Handshake()` calls `parsePluginConfig(response.config.pluginConfig)` and stores the result on
+   `this.settings`, so handlers can read `contract.plugin.settings.faucetAmount`.
+
+### Require a non-zero faucet amount (tutorial validation)
+
+Because this plugin's faucet is useless without a configured amount, extend `parsePluginConfig` to
+reject a missing/zero `faucetAmount` so the plugin fails fast at startup:
+
+```typescript
+export function parsePluginConfig(
+    raw: Uint8Array | null | undefined
+): [PluginSettings | null, IPluginError | null] {
+    if (!raw || raw.length === 0) {
+        return [null, ErrInvalidPluginConfig('missing pluginConfig (expected { "faucetAmount": <uint64> })')];
+    }
+    let parsed: Partial<PluginSettings>;
+    try {
+        parsed = JSON.parse(Buffer.from(raw).toString('utf-8')) as Partial<PluginSettings>;
+    } catch (err) {
+        return [null, ErrInvalidPluginConfig((err as Error).message)];
+    }
+    if (typeof parsed.faucetAmount !== 'number' || parsed.faucetAmount <= 0) {
+        return [null, ErrInvalidPluginConfig('faucetAmount must be greater than zero')];
+    }
+    return [{ faucetAmount: parsed.faucetAmount }, null];
+}
+```
+
+The tutorial test (`tutorial/src/rpc_test.ts`) asserts the faucet mints exactly this configured
+amount (`faucetConfiguredAmount`), proving the amount comes from `pluginConfig` and not from the RPC
+request.
+
 ## Step 7: Build and Deploy
 
 Build the plugin:
@@ -765,11 +839,14 @@ Edit `~/.canopy/config.json` and add or modify the `plugin` field to `"typescrip
 ```json
 {
   "plugin": "typescript",
+  "pluginConfig": { "faucetAmount": 1000000000 },
   ...
 }
 ```
 
 **Note**: The `plugin` field should be at the top level of the JSON configuration. If it doesn't exist, add it as the first field after the opening brace.
+
+**Note**: `pluginConfig` is an opaque (any) JSON value that Canopy forwards to the plugin unchanged. For this tutorial the TypeScript plugin expects `{ "faucetAmount": <uint64> }` and validates it at startup (see Step 6b); the plugin will refuse to start if it is missing or `faucetAmount` is zero.
 
 ### 3. Start Canopy
 

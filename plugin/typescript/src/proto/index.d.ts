@@ -912,6 +912,9 @@ export namespace types {
 
         /** PluginFSMConfig config */
         config?: (types.IPluginConfig|null);
+
+        /** PluginFSMConfig pluginConfig */
+        pluginConfig?: (Uint8Array|null);
     }
 
     /** Represents a PluginFSMConfig. */
@@ -925,6 +928,9 @@ export namespace types {
 
         /** PluginFSMConfig config. */
         public config?: (types.IPluginConfig|null);
+
+        /** PluginFSMConfig pluginConfig. */
+        public pluginConfig: Uint8Array;
 
         /**
          * Creates a new PluginFSMConfig instance using the specified properties.

@@ -54,6 +54,12 @@ class RpcTest {
         private const val NETWORK_ID = 1L
         private const val CHAIN_ID = 1L
         private const val TEST_PASSWORD = "testpassword123"
+
+        // faucetConfiguredAmount is the fixed amount (uCNPY) the plugin mints per faucet transaction.
+        // The faucet amount is NO LONGER supplied over RPC; it is operator-controlled via config.json
+        // `pluginConfig.faucetAmount` (forwarded to the plugin at handshake — see TUTORIAL.md). Keep
+        // this constant in sync with the `faucetAmount` configured in the node's config.json.
+        private const val FAUCET_CONFIGURED_AMOUNT = 1000000000L // 1000 tokens
         
         private val json = Json { ignoreUnknownKeys = true }
         private val httpClient = HttpClient.newBuilder()
@@ -94,18 +100,17 @@ class RpcTest {
         // Get account 1's key for signing
         val account1Key = keystoreGetKey(ADMIN_RPC_URL, account1Addr, TEST_PASSWORD)
         
-        // Step 2: Use faucet to add balance to account 1
+        // Step 2: Use faucet to add balance to account 1. The faucet amount is NOT passed here; it is
+        // taken from the plugin's pluginConfig.faucetAmount, so we assert the minted amount matches it.
         println("\nStep 2: Using faucet to add balance to account 1...")
         
-        val faucetAmount = 1000000000L  // 1000 tokens
         val faucetFee = 10000L
-        println("  Amount: $faucetAmount, Fee: $faucetFee")
+        println("  Amount (from pluginConfig): $FAUCET_CONFIGURED_AMOUNT, Fee: $faucetFee")
         
         val faucetTxHash = sendFaucetTx(
             QUERY_RPC_URL,
             account1Key,
             account1Addr,
-            faucetAmount,
             faucetFee,
             NETWORK_ID,
             CHAIN_ID,
@@ -129,6 +134,14 @@ class RpcTest {
         val bal1AfterFaucet = getAccountBalance(QUERY_RPC_URL, account1Addr)
         val bal2AfterFaucet = getAccountBalance(QUERY_RPC_URL, account2Addr)
         println("  Balances after faucet - Account 1: $bal1AfterFaucet, Account 2: $bal2AfterFaucet")
+
+        // Validate the faucet minted exactly pluginConfig.faucetAmount (account 1 started empty),
+        // proving the amount came from the plugin's config and not from the RPC request.
+        assertTrue(
+            bal1AfterFaucet == FAUCET_CONFIGURED_AMOUNT,
+            "faucet minted $bal1AfterFaucet to account 1, want pluginConfig.faucetAmount=$FAUCET_CONFIGURED_AMOUNT"
+        )
+        println("  Faucet minted the configured pluginConfig.faucetAmount ($FAUCET_CONFIGURED_AMOUNT) as expected")
         
         // Step 3: Send tokens from account 1 to account 2
         println("\nStep 3: Sending tokens from account 1 to account 2...")
@@ -329,27 +342,26 @@ class RpcTest {
 
         val fee = 10000L
 
-        // Step 2: Faucet the recipient twice and verify the aggregated faucet record
-        val faucetAmount1 = 700000000L
-        val faucetAmount2 = 300000000L
-
-        println("\nStep 2: Sending first faucet to recipient (amount=$faucetAmount1, fee=$fee)...")
+        // Step 2: Faucet the recipient twice and verify the aggregated faucet record. Each faucet
+        // mints the fixed pluginConfig.faucetAmount (not an RPC-supplied amount), so the record
+        // should aggregate in multiples of that configured amount.
+        println("\nStep 2: Sending first faucet to recipient (amount from pluginConfig=$FAUCET_CONFIGURED_AMOUNT, fee=$fee)...")
         var height = getHeight(QUERY_RPC_URL)
         println("  Current height: $height")
-        var txHash = sendFaucetTx(QUERY_RPC_URL, recipientKey, recipientAddr, faucetAmount1, fee, networkId, chainId, height)
+        var txHash = sendFaucetTx(QUERY_RPC_URL, recipientKey, recipientAddr, fee, networkId, chainId, height)
         println("  First faucet transaction sent: $txHash")
 
         println("  Waiting for first faucet transaction to be confirmed...")
         assertTrue(waitForTxInclusion(QUERY_RPC_URL, recipientAddr, txHash, txTimeoutMs), "First faucet tx not included")
         println("  First faucet transaction confirmed!")
 
-        // after the first faucet, the record should exist with count=1 and totalAmount=faucetAmount1
+        // after the first faucet, the record should exist with count=1 and totalAmount=pluginConfig.faucetAmount
         println("  Querying plugin endpoint GET /v1/query/faucets?address=$recipientAddr ...")
         var faucet = pollFaucetRecordUntil(recipientAddr, 1, recordTimeoutMs)
             ?: fail("Failed to query faucet record after first faucet")
         println("  Faucet record after first faucet: recipient=${faucet.recipientAddress} totalAmount=${faucet.totalAmount} count=${faucet.count}")
         assertTrue(faucet.count == 1L, "faucet count after first faucet = ${faucet.count}, want 1")
-        assertTrue(faucet.totalAmount == faucetAmount1, "faucet totalAmount after first faucet = ${faucet.totalAmount}, want $faucetAmount1")
+        assertTrue(faucet.totalAmount == FAUCET_CONFIGURED_AMOUNT, "faucet totalAmount after first faucet = ${faucet.totalAmount}, want pluginConfig.faucetAmount=$FAUCET_CONFIGURED_AMOUNT")
         assertTrue(faucet.recipientAddress.equals(recipientAddr, ignoreCase = true), "faucet recipientAddress = ${faucet.recipientAddress}, want $recipientAddr")
         println("  Faucet record verified after first faucet (count=1)")
 
@@ -365,18 +377,18 @@ class RpcTest {
         assertTrue(faucetProof.exists, "faucet proof exists = false, want true for an existing record")
         println("  Verifiable proof confirmed (exists=true, non-empty stateRoot/proof, height>0)")
 
-        println("\n  Sending second faucet to recipient (amount=$faucetAmount2, fee=$fee)...")
+        println("\n  Sending second faucet to recipient (amount from pluginConfig=$FAUCET_CONFIGURED_AMOUNT, fee=$fee)...")
         height = getHeight(QUERY_RPC_URL)
         println("  Current height: $height")
-        txHash = sendFaucetTx(QUERY_RPC_URL, recipientKey, recipientAddr, faucetAmount2, fee, networkId, chainId, height)
+        txHash = sendFaucetTx(QUERY_RPC_URL, recipientKey, recipientAddr, fee, networkId, chainId, height)
         println("  Second faucet transaction sent: $txHash")
 
         println("  Waiting for second faucet transaction to be confirmed...")
         assertTrue(waitForTxInclusion(QUERY_RPC_URL, recipientAddr, txHash, txTimeoutMs), "Second faucet tx not included")
         println("  Second faucet transaction confirmed!")
 
-        // after the second faucet, count should be 2 and totalAmount the sum of both
-        val wantTotal = faucetAmount1 + faucetAmount2
+        // after the second faucet, count should be 2 and totalAmount twice the configured faucet amount
+        val wantTotal = 2 * FAUCET_CONFIGURED_AMOUNT
         println("  Waiting for faucet record to reflect the second faucet (count=2)...")
         faucet = pollFaucetRecordUntil(recipientAddr, 2, recordTimeoutMs)
             ?: fail("Failed to query faucet record after second faucet")
@@ -403,7 +415,7 @@ class RpcTest {
         println("\nStep 3: Funding admin via faucet so it can pay the reward fee...")
         height = getHeight(QUERY_RPC_URL)
         println("  Current height: $height")
-        txHash = sendFaucetTx(QUERY_RPC_URL, adminKey, adminAddr, 100000000L, fee, networkId, chainId, height)
+        txHash = sendFaucetTx(QUERY_RPC_URL, adminKey, adminAddr, fee, networkId, chainId, height)
         println("  Admin faucet transaction sent: $txHash")
 
         println("  Waiting for admin faucet transaction to be confirmed...")
@@ -516,7 +528,7 @@ class RpcTest {
 
         val height = getHeight(QUERY_RPC_URL)
         println("  Current height: $height")
-        val txHash = sendFaucetTx(QUERY_RPC_URL, recipientKey, recipientAddr, 1000000000L, 10000L, networkId, chainId, height)
+        val txHash = sendFaucetTx(QUERY_RPC_URL, recipientKey, recipientAddr, 10000L, networkId, chainId, height)
         println("  Faucet transaction sent: $txHash")
         assertTrue(waitForTxInclusion(QUERY_RPC_URL, recipientAddr, txHash, txTimeoutMs), "faucet tx not included")
         println("  Faucet transaction confirmed!")
@@ -719,22 +731,22 @@ class RpcTest {
     }
     
     /**
-     * Send a faucet transaction.
+     * Send a faucet transaction. Note there is no amount parameter: the minted amount comes from the
+     * plugin's pluginConfig.faucetAmount, not from the caller/RPC.
      */
     private fun sendFaucetTx(
         rpcUrl: String,
         signerKey: KeyGroup,
         recipientAddr: String,
-        amount: Long,
         fee: Long,
         networkId: Long,
         chainId: Long,
         height: Long
     ): String {
+        // Create the faucet message (no amount — it is set by pluginConfig.faucetAmount)
         val faucetMsg = mapOf(
             "signerAddress" to signerKey.address,
-            "recipientAddress" to recipientAddr,
-            "amount" to amount
+            "recipientAddress" to recipientAddr
         )
         
         return buildSignAndSendTx(rpcUrl, signerKey, "faucet", faucetMsg, fee, networkId, chainId, height)
@@ -837,7 +849,6 @@ class RpcTest {
                 MessageFaucet.newBuilder()
                     .setSignerAddress(ByteString.copyFrom(signerAddr))
                     .setRecipientAddress(ByteString.copyFrom(recipientAddr))
-                    .setAmount(msgJson["amount"] as Long)
                     .build()
                     .toByteArray()
             }

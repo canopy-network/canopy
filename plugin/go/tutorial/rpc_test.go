@@ -62,13 +62,13 @@ func TestPluginTransactions(t *testing.T) {
 		t.Fatalf("Failed to get account 1 key: %v", err)
 	}
 
-	// Step 2: Use faucet to add balance to account 1
+	// Step 2: Use faucet to add balance to account 1. The faucet amount is NOT passed here; it is
+	// taken from the plugin's pluginConfig.faucetAmount, so we assert the minted amount matches it.
 	t.Log("Step 2: Using faucet to add balance to account 1...")
 
-	faucetAmount := uint64(1000000000) // 1000 tokens
 	faucetFee := uint64(10000)
 
-	faucetTxHash, err := sendFaucetTx(queryRPCURL, account1Key, account1Addr, faucetAmount, faucetFee, networkID, chainID, height)
+	faucetTxHash, err := sendFaucetTx(queryRPCURL, account1Key, account1Addr, faucetFee, networkID, chainID, height)
 	if err != nil {
 		t.Fatalf("Failed to send faucet transaction: %v", err)
 	}
@@ -97,6 +97,13 @@ func TestPluginTransactions(t *testing.T) {
 	bal1, _ := getAccountBalance(queryRPCURL, account1Addr)
 	bal2, _ := getAccountBalance(queryRPCURL, account2Addr)
 	t.Logf("Balances after faucet - Account 1: %d, Account 2: %d", bal1, bal2)
+
+	// Validate the faucet minted exactly pluginConfig.faucetAmount (account 1 started empty), proving
+	// the amount came from the plugin's config and not from the RPC request.
+	if bal1 != faucetConfiguredAmount {
+		t.Fatalf("faucet minted %d to account 1, want pluginConfig.faucetAmount=%d", bal1, faucetConfiguredAmount)
+	}
+	t.Logf("Faucet minted the configured pluginConfig.faucetAmount (%d) as expected", faucetConfiguredAmount)
 
 	// Step 3: Send tokens from account 1 to account 2
 	t.Log("Step 3: Sending tokens from account 1 to account 2...")
@@ -253,14 +260,13 @@ func TestPluginCustomRPCEndpoints(t *testing.T) {
 
 	fee := uint64(10000)
 
-	// Step 2: Faucet the recipient twice and verify the aggregated faucet record
-	faucetAmount1 := uint64(700000000)
-	faucetAmount2 := uint64(300000000)
-
-	t.Logf("Step 2: Sending first faucet to recipient (amount=%d, fee=%d)...", faucetAmount1, fee)
+	// Step 2: Faucet the recipient twice and verify the aggregated faucet record. Each faucet mints
+	// the fixed pluginConfig.faucetAmount (not an RPC-supplied amount), so the record should aggregate
+	// in multiples of that configured amount.
+	t.Logf("Step 2: Sending first faucet to recipient (amount from pluginConfig=%d, fee=%d)...", faucetConfiguredAmount, fee)
 	height, _ := getHeight(queryRPCURL)
 	t.Logf("Current height: %d", height)
-	txHash, err := sendFaucetTx(queryRPCURL, recipientKey, recipientAddr, faucetAmount1, fee, networkID, chainID, height)
+	txHash, err := sendFaucetTx(queryRPCURL, recipientKey, recipientAddr, fee, networkID, chainID, height)
 	if err != nil {
 		t.Fatalf("Failed to send first faucet tx: %v", err)
 	}
@@ -282,8 +288,8 @@ func TestPluginCustomRPCEndpoints(t *testing.T) {
 	if faucet.Count != 1 {
 		t.Errorf("faucet count after first faucet = %d, want 1", faucet.Count)
 	}
-	if faucet.TotalAmount != faucetAmount1 {
-		t.Errorf("faucet totalAmount after first faucet = %d, want %d", faucet.TotalAmount, faucetAmount1)
+	if faucet.TotalAmount != faucetConfiguredAmount {
+		t.Errorf("faucet totalAmount after first faucet = %d, want pluginConfig.faucetAmount=%d", faucet.TotalAmount, faucetConfiguredAmount)
 	}
 	if !strings.EqualFold(faucet.RecipientAddress, recipientAddr) {
 		t.Errorf("faucet recipientAddress = %s, want %s", faucet.RecipientAddress, recipientAddr)
@@ -311,10 +317,10 @@ func TestPluginCustomRPCEndpoints(t *testing.T) {
 	}
 	t.Logf("Faucet endpoint returned a verifiable proof: %d node(s), height=%d, exists=%v", len(env.Proof), env.Height, env.Exists)
 
-	t.Logf("Sending second faucet to recipient (amount=%d, fee=%d)...", faucetAmount2, fee)
+	t.Logf("Sending second faucet to recipient (amount from pluginConfig=%d, fee=%d)...", faucetConfiguredAmount, fee)
 	height, _ = getHeight(queryRPCURL)
 	t.Logf("Current height: %d", height)
-	txHash, err = sendFaucetTx(queryRPCURL, recipientKey, recipientAddr, faucetAmount2, fee, networkID, chainID, height)
+	txHash, err = sendFaucetTx(queryRPCURL, recipientKey, recipientAddr, fee, networkID, chainID, height)
 	if err != nil {
 		t.Fatalf("Failed to send second faucet tx: %v", err)
 	}
@@ -326,8 +332,8 @@ func TestPluginCustomRPCEndpoints(t *testing.T) {
 	}
 	t.Log("Second faucet transaction confirmed!")
 
-	// after the second faucet, count should be 2 and totalAmount the sum of both
-	wantTotal := faucetAmount1 + faucetAmount2
+	// after the second faucet, count should be 2 and totalAmount twice the configured faucet amount
+	wantTotal := 2 * faucetConfiguredAmount
 	t.Log("Waiting for faucet record to reflect the second faucet (count=2)...")
 	faucet, err = pollFaucetRecordUntil(pluginRPCURL, recipientAddr, 2, recordTimeout)
 	if err != nil {
@@ -365,7 +371,7 @@ func TestPluginCustomRPCEndpoints(t *testing.T) {
 	t.Log("Step 3: Funding admin via faucet so it can pay the reward fee...")
 	height, _ = getHeight(queryRPCURL)
 	t.Logf("Current height: %d", height)
-	txHash, err = sendFaucetTx(queryRPCURL, adminKey, adminAddr, uint64(100000000), fee, networkID, chainID, height)
+	txHash, err = sendFaucetTx(queryRPCURL, adminKey, adminAddr, fee, networkID, chainID, height)
 	if err != nil {
 		t.Fatalf("Failed to faucet admin: %v", err)
 	}
@@ -618,13 +624,19 @@ func checkTxNotFailed(rpcURL, senderAddr string) (int, error) {
 	return result.TotalCount, nil
 }
 
-// sendFaucetTx sends a faucet transaction using raw JSON
-func sendFaucetTx(rpcURL string, signerKey *keyGroup, recipientAddr string, amount, fee, networkID, chainID, height uint64) (string, error) {
-	// Create the faucet message as JSON map
+// faucetConfiguredAmount is the fixed amount (uCNPY) the plugin mints per faucet transaction. The
+// faucet amount is NO LONGER supplied over RPC; it is operator-controlled via config.json
+// `pluginConfig.faucetAmount` (forwarded to the plugin at handshake — see TUTORIAL.md). Keep this
+// constant in sync with the `faucetAmount` configured in the node's config.json for these tests.
+const faucetConfiguredAmount = uint64(1000000000) // 1000 tokens
+
+// sendFaucetTx sends a faucet transaction using raw JSON. Note there is no amount parameter: the
+// minted amount comes from the plugin's pluginConfig.faucetAmount, not from the caller/RPC.
+func sendFaucetTx(rpcURL string, signerKey *keyGroup, recipientAddr string, fee, networkID, chainID, height uint64) (string, error) {
+	// Create the faucet message as JSON map (no amount — it is set by pluginConfig.faucetAmount)
 	faucetMsg := map[string]interface{}{
 		"signerAddress":    signerKey.Address,
 		"recipientAddress": recipientAddr,
-		"amount":           float64(amount),
 	}
 
 	return buildSignAndSendTx(rpcURL, signerKey, "faucet", faucetMsg, fee, networkID, chainID, height)
@@ -704,7 +716,6 @@ func buildSignAndSendTx(rpcURL string, signerKey *keyGroup, msgType string, msgJ
 		msgProto = &contract.MessageFaucet{
 			SignerAddress:    signerAddr,
 			RecipientAddress: recipientAddr,
-			Amount:           uint64(msgJSON["amount"].(float64)),
 		}
 	}
 
@@ -1084,7 +1095,7 @@ func TestFaucetProofTamperDetected(t *testing.T) {
 		t.Fatalf("Failed to get recipient key: %v", err)
 	}
 	height, _ := getHeight(queryRPCURL)
-	txHash, err := sendFaucetTx(queryRPCURL, recipientKey, recipientAddr, uint64(1000000000), uint64(10000), networkID, chainID, height)
+	txHash, err := sendFaucetTx(queryRPCURL, recipientKey, recipientAddr, uint64(10000), networkID, chainID, height)
 	if err != nil {
 		t.Fatalf("Failed to send faucet tx: %v", err)
 	}

@@ -83,7 +83,14 @@ message PluginConfig {
 }
 
 // PluginFSMConfig is the identity information of the plugin that is communicated from the fsm to the plugin
-message PluginFSMConfig {PluginConfig config = 1;}
+message PluginFSMConfig {
+  // config: the identity information of the plugin (echoed back from the handshake)
+  PluginConfig config = 1;
+  // plugin_config: the opaque, user-supplied `pluginConfig` field from the node's config.json. It is
+  // forwarded verbatim (raw JSON bytes) so the plugin can decode + validate it into its own expected
+  // shape at startup. Canopy core never inspects this blob.
+  bytes plugin_config = 2; // @gotags: json:"pluginConfig"
+}
 
 // Core block lifecycle messages
 

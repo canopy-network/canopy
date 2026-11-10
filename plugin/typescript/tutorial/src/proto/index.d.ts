@@ -4083,9 +4083,6 @@ export namespace types {
 
         /** MessageFaucet recipientAddress */
         recipientAddress?: (Uint8Array|null);
-
-        /** MessageFaucet amount */
-        amount?: (number|Long|null);
     }
 
     /** Represents a MessageFaucet. */
@@ -4102,9 +4099,6 @@ export namespace types {
 
         /** MessageFaucet recipientAddress. */
         public recipientAddress: Uint8Array;
-
-        /** MessageFaucet amount. */
-        public amount: (number|Long);
 
         /**
          * Creates a new MessageFaucet instance using the specified properties.

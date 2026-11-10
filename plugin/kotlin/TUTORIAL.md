@@ -38,13 +38,13 @@ message MessageReward {
 
 // MessageFaucet is a test-only transaction that mints tokens to any address
 // No balance check required - just mints tokens for testing purposes
+// NOTE: there is intentionally NO `amount` field. The minted amount is operator-controlled via
+// config.json `pluginConfig.faucetAmount` (see Step 7b), not supplied per-transaction over RPC.
 message MessageFaucet {
   // signer_address: the address signing this transaction (for auth)
   bytes signer_address = 1; // @gotags: json:"signerAddress"
   // recipient_address: who receives the tokens
   bytes recipient_address = 2; // @gotags: json:"recipientAddress"
-  // amount: tokens to mint
-  uint64 amount = 3;
 }
 ```
 
@@ -147,14 +147,8 @@ private fun checkMessageFaucet(msg: MessageFaucet): PluginCheckResponse {
             .build()
     }
 
-    // Validate amount - must be greater than zero.
-    // Zero-amount transactions are meaningless and waste block space.
-    // Note: Kotlin uses 0L for Long literal comparison.
-    if (msg.amount == 0L) {
-        return PluginCheckResponse.newBuilder()
-            .setError(ErrInvalidAmount().toProto())
-            .build()
-    }
+    // NOTE: there is no amount to validate here — the faucet mints a fixed, operator-controlled
+    // amount (pluginConfig.faucetAmount), which is validated once at startup (see Step 7b).
 
     // Build and return the successful check response:
     // - recipient: who receives funds (used for indexing/notifications)
@@ -303,8 +297,11 @@ private fun deliverMessageFaucet(msg: MessageFaucet): PluginDeliverResponse {
     // CORE LOGIC: Create updated recipient with minted tokens added.
     // Protobuf objects are immutable, so we use toBuilder() to create a modified copy.
     // This is where tokens are "minted" - we simply increase the balance.
+    // The amount is NOT taken from the message; it comes from the operator-controlled
+    // pluginConfig.faucetAmount, decoded + validated once at startup (see Step 7b).
+    val faucetAmount = plugin.settings.faucetAmount
     val newRecipient = recipient.toBuilder()
-        .setAmount(recipient.amount + msg.amount)
+        .setAmount(recipient.amount + faucetAmount)
         .build()
 
     // Build and send a state write request to persist the new balance.
@@ -609,6 +606,77 @@ cd plugin/kotlin
 make build
 ```
 
+## Step 7b: Configure the faucet amount via `pluginConfig`
+
+The faucet amount is **operator-controlled**, not supplied per-transaction. It is read from the
+node's `config.json` `pluginConfig` field, which Canopy forwards verbatim to the plugin during the
+handshake. `pluginConfig` is intentionally free-form JSON on the node side, so each plugin can
+define its own schema and validate it at startup.
+
+### How it flows
+
+1. **Node config** (`~/.canopy/config.json`) carries an opaque `pluginConfig` JSON value:
+
+   ```json
+   {
+     "plugin": "kotlin",
+     "pluginConfig": { "faucetAmount": 1000000000 }
+   }
+   ```
+
+2. **Canopy core** (`lib/config.go` `MainConfig.PluginConfig`) reads it as raw JSON and forwards it
+   to the plugin in the handshake response (`PluginFSMConfig.plugin_config`). Core never inspects it.
+
+3. **The plugin** decodes + validates it at startup. The base SDK (`Config.kt`) defines the
+   expected shape and the single validation entry point:
+
+   ```kotlin
+   // Config gains an opaque pluginConfig field (any JSON)
+   @Serializable
+   data class Config(
+       val chainId: Long = 1,
+       val dataDirPath: String = "/tmp/plugin/",
+       val rpcAddress: String = "0.0.0.0:50010",
+       val pluginConfig: JsonElement? = null
+   )
+
+   // PluginSettings is the typed, validated shape the plugin expects
+   @Serializable
+   data class PluginSettings(val faucetAmount: Long = 0)
+
+   // parsePluginConfig decodes + validates the forwarded JSON at startup; a malformed blob throws
+   // (and the plugin exits), satisfying "validate it is in the expected form".
+   fun parsePluginConfig(raw: ByteArray): PluginSettings { ... }
+   ```
+
+   `PluginClient.handshake()` calls `parsePluginConfig(response.config.pluginConfig.toByteArray())`
+   and stores the result on `plugin.settings`, so handlers can read `plugin.settings.faucetAmount`.
+
+### Require a non-zero faucet amount (tutorial validation)
+
+Because this plugin's faucet is useless without a configured amount, extend `parsePluginConfig` to
+reject a missing/zero `faucetAmount` so the plugin fails fast at startup:
+
+```kotlin
+fun parsePluginConfig(raw: ByteArray): PluginSettings {
+    if (raw.isEmpty()) {
+        throw IllegalArgumentException("missing pluginConfig (expected { \"faucetAmount\": <uint64> })")
+    }
+    val settings = try {
+        Json { ignoreUnknownKeys = true }.decodeFromString<PluginSettings>(raw.decodeToString())
+    } catch (e: Exception) {
+        throw IllegalArgumentException("invalid pluginConfig: ${e.message}", e)
+    }
+    if (settings.faucetAmount <= 0L) {
+        throw IllegalArgumentException("faucetAmount must be greater than zero")
+    }
+    return settings
+}
+```
+
+The tutorial test (`tutorial/.../RpcTest.kt`) asserts the faucet mints exactly this configured amount
+(`FAUCET_CONFIGURED_AMOUNT`), proving the amount comes from `pluginConfig` and not from the RPC request.
+
 ## Step 8: Running Canopy with the Plugin
 
 There are two ways to run Canopy with the Kotlin plugin: locally or with Docker.
@@ -628,14 +696,18 @@ canopy start
 
 #### 2. Enable the Kotlin plugin
 
-Edit `~/.canopy/config.json` and add or modify the `plugin` field to `"kotlin"`:
+Edit `~/.canopy/config.json` and add or modify the `plugin` field to `"kotlin"`, and supply the
+opaque `pluginConfig` the plugin expects (here `faucetAmount`):
 
 ```json
 {
   "plugin": "kotlin",
+  "pluginConfig": { "faucetAmount": 1000000000 },
   ...
 }
 ```
+
+> **Note**: `pluginConfig` is an opaque (any) JSON value that Canopy forwards to the plugin unchanged. For this tutorial the Kotlin plugin expects `{ "faucetAmount": <uint64> }` and validates it at startup (see Step 7b); the plugin will refuse to start if it is missing or `faucetAmount` is zero.
 
 #### 3. Start Canopy
 
@@ -848,7 +920,7 @@ Step 1: Creating two accounts in keystore...
   Current height: ...
 
 Step 2: Using faucet to add balance to account 1...
-  Amount: 1000000000, Fee: 10000
+  Amount (from pluginConfig): 1000000000, Fee: 10000
   Faucet transaction sent: ...
   Waiting for faucet transaction to be confirmed...
   Faucet transaction confirmed!

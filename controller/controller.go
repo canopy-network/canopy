@@ -334,7 +334,7 @@ func (c *Controller) PluginConnectSync() {
 		c.log.Fatalf("Failed to accept plugin connection: %v", e)
 	}
 	// create plugin object
-	c.Plugin = lib.NewPlugin(conn, c.log, time.Duration(c.Config.PluginTimeoutMS)*time.Millisecond)
+	c.Plugin = lib.NewPlugin(conn, c.log, time.Duration(c.Config.PluginTimeoutMS)*time.Millisecond, c.Config.PluginConfig)
 	// register the detached, read-only query provider so plugins can serve custom RPC endpoints
 	c.Plugin.SetQueryProvider(&pluginQueryProvider{controller: c})
 	// set plugin in FSM and mempool FSM

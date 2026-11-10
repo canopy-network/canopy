@@ -10766,7 +10766,6 @@ $root.types = (function() {
          * @interface IMessageFaucet
          * @property {Uint8Array|null} [signerAddress] MessageFaucet signerAddress
          * @property {Uint8Array|null} [recipientAddress] MessageFaucet recipientAddress
-         * @property {number|Long|null} [amount] MessageFaucet amount
          */
 
         /**
@@ -10801,14 +10800,6 @@ $root.types = (function() {
         MessageFaucet.prototype.recipientAddress = $util.newBuffer([]);
 
         /**
-         * MessageFaucet amount.
-         * @member {number|Long} amount
-         * @memberof types.MessageFaucet
-         * @instance
-         */
-        MessageFaucet.prototype.amount = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
-
-        /**
          * Creates a new MessageFaucet instance using the specified properties.
          * @function create
          * @memberof types.MessageFaucet
@@ -10836,8 +10827,6 @@ $root.types = (function() {
                 writer.uint32(/* id 1, wireType 2 =*/10).bytes(message.signerAddress);
             if (message.recipientAddress != null && Object.hasOwnProperty.call(message, "recipientAddress"))
                 writer.uint32(/* id 2, wireType 2 =*/18).bytes(message.recipientAddress);
-            if (message.amount != null && Object.hasOwnProperty.call(message, "amount"))
-                writer.uint32(/* id 3, wireType 0 =*/24).uint64(message.amount);
             return writer;
         };
 
@@ -10882,10 +10871,6 @@ $root.types = (function() {
                         message.recipientAddress = reader.bytes();
                         break;
                     }
-                case 3: {
-                        message.amount = reader.uint64();
-                        break;
-                    }
                 default:
                     reader.skipType(tag & 7);
                     break;
@@ -10927,9 +10912,6 @@ $root.types = (function() {
             if (message.recipientAddress != null && message.hasOwnProperty("recipientAddress"))
                 if (!(message.recipientAddress && typeof message.recipientAddress.length === "number" || $util.isString(message.recipientAddress)))
                     return "recipientAddress: buffer expected";
-            if (message.amount != null && message.hasOwnProperty("amount"))
-                if (!$util.isInteger(message.amount) && !(message.amount && $util.isInteger(message.amount.low) && $util.isInteger(message.amount.high)))
-                    return "amount: integer|Long expected";
             return null;
         };
 
@@ -10955,15 +10937,6 @@ $root.types = (function() {
                     $util.base64.decode(object.recipientAddress, message.recipientAddress = $util.newBuffer($util.base64.length(object.recipientAddress)), 0);
                 else if (object.recipientAddress.length >= 0)
                     message.recipientAddress = object.recipientAddress;
-            if (object.amount != null)
-                if ($util.Long)
-                    (message.amount = $util.Long.fromValue(object.amount)).unsigned = true;
-                else if (typeof object.amount === "string")
-                    message.amount = parseInt(object.amount, 10);
-                else if (typeof object.amount === "number")
-                    message.amount = object.amount;
-                else if (typeof object.amount === "object")
-                    message.amount = new $util.LongBits(object.amount.low >>> 0, object.amount.high >>> 0).toNumber(true);
             return message;
         };
 
@@ -10995,21 +10968,11 @@ $root.types = (function() {
                     if (options.bytes !== Array)
                         object.recipientAddress = $util.newBuffer(object.recipientAddress);
                 }
-                if ($util.Long) {
-                    var long = new $util.Long(0, 0, true);
-                    object.amount = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
-                } else
-                    object.amount = options.longs === String ? "0" : 0;
             }
             if (message.signerAddress != null && message.hasOwnProperty("signerAddress"))
                 object.signerAddress = options.bytes === String ? $util.base64.encode(message.signerAddress, 0, message.signerAddress.length) : options.bytes === Array ? Array.prototype.slice.call(message.signerAddress) : message.signerAddress;
             if (message.recipientAddress != null && message.hasOwnProperty("recipientAddress"))
                 object.recipientAddress = options.bytes === String ? $util.base64.encode(message.recipientAddress, 0, message.recipientAddress.length) : options.bytes === Array ? Array.prototype.slice.call(message.recipientAddress) : message.recipientAddress;
-            if (message.amount != null && message.hasOwnProperty("amount"))
-                if (typeof message.amount === "number")
-                    object.amount = options.longs === String ? String(message.amount) : message.amount;
-                else
-                    object.amount = options.longs === String ? $util.Long.prototype.toString.call(message.amount) : options.longs === Number ? new $util.LongBits(message.amount.low >>> 0, message.amount.high >>> 0).toNumber(true) : message.amount;
             return object;
         };
 

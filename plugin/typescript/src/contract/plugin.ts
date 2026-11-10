@@ -32,7 +32,8 @@ import {
     ErrUnexpectedFSMToPlugin,
     ErrInvalidFSMToPluginMMessage,
     ErrFromAny,
-    ErrInvalidMessageCast
+    ErrInvalidMessageCast,
+    ErrInvalidPluginConfig
 } from './error.js';
 
 // Forward declaration - Contract will be set after import
@@ -57,6 +58,10 @@ export interface Config {
     DataDirPath: string;
     // rpcAddress is the listen address for the plugin's own HTTP server that exposes custom RPC endpoints
     rpcAddress: string;
+    // pluginConfig is an opaque, plugin-defined configuration value (any JSON). It mirrors the node
+    // config.json `pluginConfig` field; Canopy forwards that value to the plugin at handshake, and the
+    // plugin decodes + validates it into its own expected shape (see PluginSettings) at startup.
+    pluginConfig?: unknown;
 }
 
 // DefaultConfig() returns the default configuration
@@ -66,6 +71,38 @@ export function DefaultConfig(): Config {
         DataDirPath: '/tmp/plugin/',
         rpcAddress: '0.0.0.0:50010'
     };
+}
+
+// PluginSettings is the typed, validated shape the plugin expects the opaque `pluginConfig` to take.
+// Keeping `pluginConfig` as opaque JSON on the wire lets each plugin define its own schema while still
+// failing fast at startup if the operator supplied something malformed.
+export interface PluginSettings {
+    // faucetAmount is the fixed amount (in uCNPY) minted per faucet transaction. It is operator
+    // controlled via config.json `pluginConfig.faucetAmount` rather than being supplied per request
+    // over RPC, so the node operator — not the caller — decides how much the faucet dispenses.
+    faucetAmount: number;
+}
+
+// parsePluginConfig() decodes the opaque pluginConfig (raw JSON forwarded from the node's config.json)
+// into the plugin's expected PluginSettings shape and validates it. This is the single place where the
+// plugin asserts the operator-supplied blob is "in the expected form"; it is called once at startup.
+export function parsePluginConfig(
+    raw: Uint8Array | null | undefined
+): [PluginSettings | null, IPluginError | null] {
+    const settings: PluginSettings = { faucetAmount: 0 };
+    // a missing pluginConfig is treated as empty settings so the base plugin still starts
+    if (!raw || raw.length === 0) {
+        return [settings, null];
+    }
+    // the blob must be a well-formed JSON object matching PluginSettings
+    try {
+        const parsed = JSON.parse(Buffer.from(raw).toString('utf-8')) as Partial<PluginSettings>;
+        settings.faucetAmount =
+            typeof parsed.faucetAmount === 'number' ? parsed.faucetAmount : 0;
+        return [settings, null];
+    } catch (err) {
+        return [null, ErrInvalidPluginConfig((err as Error).message)];
+    }
 }
 
 // NewConfigFromFile() populates a Config object from a JSON file
@@ -112,6 +149,9 @@ export class Plugin {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     requestContract: Map<string, any> = new Map();
     config: Config;
+    // settings is the typed, validated form of the opaque pluginConfig (set at handshake). It is a
+    // DISTINCT concept from `pluginConfig` above, which carries the protobuf contract identity.
+    settings: PluginSettings | null = null;
     private buffer: Buffer = Buffer.alloc(0);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -134,6 +174,14 @@ export class Plugin {
             return ErrUnexpectedFSMToPlugin(typeof response);
         }
         this.fsmConfig = response.config;
+        // decode + validate the opaque pluginConfig the node forwarded from its config.json. This is
+        // the 'expected form' check: a malformed blob fails the handshake (and StartPlugin exits on it).
+        const [settings, settingsErr] = parsePluginConfig(response.config.pluginConfig);
+        if (settingsErr) {
+            return settingsErr;
+        }
+        this.settings = settings;
+        console.log(`Loaded pluginConfig: faucetAmount=${settings?.faucetAmount}`);
         return null;
     }
 

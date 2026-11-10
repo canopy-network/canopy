@@ -31,6 +31,12 @@ const NETWORK_ID = 1n;
 const CHAIN_ID = 1n;
 const TEST_PASSWORD = 'testpassword123';
 
+// faucetConfiguredAmount is the fixed amount (uCNPY) the plugin mints per faucet transaction. The
+// faucet amount is NO LONGER supplied over RPC; it is operator-controlled via config.json
+// `pluginConfig.faucetAmount` (forwarded to the plugin at handshake — see TUTORIAL.md). Keep this
+// constant in sync with the `faucetAmount` configured in the node's config.json for these tests.
+const faucetConfiguredAmount = 1000000000n; // 1000 tokens
+
 // Key group holds key information from the keystore
 interface KeyGroup {
     address: string;
@@ -268,12 +274,13 @@ async function buildSignAndSendTx(
             break;
         }
         case 'faucet': {
+            // NOTE: the faucet message carries no amount — the minted amount is operator-controlled
+            // via pluginConfig.faucetAmount, not supplied over RPC.
             const signerAddr = hexToBytes(msgJSON['signerAddress'] as string);
             const recipientAddr = hexToBytes(msgJSON['recipientAddress'] as string);
             const msg = types.MessageFaucet.create({
                 signerAddress: signerAddr,
-                recipientAddress: recipientAddr,
-                amount: msgJSON['amount'] as number
+                recipientAddress: recipientAddr
             });
             msgProto = types.MessageFaucet.encode(msg).finish();
             break;
@@ -322,12 +329,12 @@ async function buildSignAndSendTx(
     return JSON.parse(respBody) as string;
 }
 
-// Send a faucet transaction
+// Send a faucet transaction. Note there is no amount parameter: the minted amount comes from the
+// plugin's pluginConfig.faucetAmount, not from the caller/RPC.
 async function sendFaucetTx(
     rpcURL: string,
     signerKey: KeyGroup,
     recipientAddr: string,
-    amount: bigint,
     fee: bigint,
     networkId: bigint,
     chainId: bigint,
@@ -335,8 +342,7 @@ async function sendFaucetTx(
 ): Promise<string> {
     const faucetMsg = {
         signerAddress: signerKey.address,
-        recipientAddress: recipientAddr,
-        amount: Number(amount)
+        recipientAddress: recipientAddr
     };
 
     return buildSignAndSendTx(
@@ -431,17 +437,16 @@ async function testPluginTransactions(): Promise<void> {
     // Get account 1's key for signing
     const account1Key = await keystoreGetKey(ADMIN_RPC_URL, account1Addr, TEST_PASSWORD);
 
-    // Step 2: Use faucet to add balance to account 1
+    // Step 2: Use faucet to add balance to account 1. The faucet amount is NOT passed here; it is
+    // taken from the plugin's pluginConfig.faucetAmount, so we assert the minted amount matches it.
     console.log('\nStep 2: Using faucet to add balance to account 1...');
 
-    const faucetAmount = 1000000000n; // 1000 tokens
     const faucetFee = 10000n;
 
     const faucetTxHash = await sendFaucetTx(
         QUERY_RPC_URL,
         account1Key,
         account1Addr,
-        faucetAmount,
         faucetFee,
         NETWORK_ID,
         CHAIN_ID,
@@ -476,6 +481,17 @@ async function testPluginTransactions(): Promise<void> {
     const bal2AfterFaucet = await getAccountBalance(QUERY_RPC_URL, account2Addr);
     console.log(
         `Balances after faucet - Account 1: ${bal1AfterFaucet}, Account 2: ${bal2AfterFaucet}`
+    );
+
+    // Validate the faucet minted exactly pluginConfig.faucetAmount (account 1 started empty), proving
+    // the amount came from the plugin's config and not from the RPC request.
+    if (bal1AfterFaucet !== faucetConfiguredAmount) {
+        throw new Error(
+            `faucet minted ${bal1AfterFaucet} to account 1, want pluginConfig.faucetAmount=${faucetConfiguredAmount}`
+        );
+    }
+    console.log(
+        `Faucet minted the configured pluginConfig.faucetAmount (${faucetConfiguredAmount}) as expected`
     );
 
     // Step 3: Send tokens from account 1 to account 2
@@ -862,18 +878,18 @@ async function testPluginCustomRPCEndpoints(): Promise<void> {
 
     const fee = 10000n;
 
-    // Step 2: Faucet the recipient twice and verify the aggregated faucet record
-    const faucetAmount1 = 700000000n;
-    const faucetAmount2 = 300000000n;
-
-    console.log(`Step 2: Sending first faucet to recipient (amount=${faucetAmount1}, fee=${fee})...`);
+    // Step 2: Faucet the recipient twice and verify the aggregated faucet record. Each faucet mints
+    // the fixed pluginConfig.faucetAmount (not an RPC-supplied amount), so the record should
+    // aggregate in multiples of that configured amount.
+    console.log(
+        `Step 2: Sending first faucet to recipient (amount from pluginConfig=${faucetConfiguredAmount}, fee=${fee})...`
+    );
     let height = await getHeight(QUERY_RPC_URL);
     console.log(`Current height: ${height}`);
     let txHash = await sendFaucetTx(
         QUERY_RPC_URL,
         recipientKey,
         recipientAddr,
-        faucetAmount1,
         fee,
         NETWORK_ID,
         CHAIN_ID,
@@ -887,7 +903,7 @@ async function testPluginCustomRPCEndpoints(): Promise<void> {
     }
     console.log('First faucet transaction confirmed!');
 
-    // after the first faucet, the record should exist with count=1 and totalAmount=faucetAmount1
+    // after the first faucet, the record should exist with count=1 and totalAmount=faucetConfiguredAmount
     console.log(`Querying plugin endpoint GET /v1/query/faucets?address=${recipientAddr} ...`);
     let faucet = await pollFaucetRecord(PLUGIN_RPC_URL, recipientAddr, recordTimeout);
     console.log(
@@ -896,9 +912,9 @@ async function testPluginCustomRPCEndpoints(): Promise<void> {
     if (faucet.count !== 1n) {
         throw new Error(`faucet count after first faucet = ${faucet.count}, want 1`);
     }
-    if (faucet.totalAmount !== faucetAmount1) {
+    if (faucet.totalAmount !== faucetConfiguredAmount) {
         throw new Error(
-            `faucet totalAmount after first faucet = ${faucet.totalAmount}, want ${faucetAmount1}`
+            `faucet totalAmount after first faucet = ${faucet.totalAmount}, want pluginConfig.faucetAmount=${faucetConfiguredAmount}`
         );
     }
     if (faucet.recipientAddress.toLowerCase() !== recipientAddr.toLowerCase()) {
@@ -922,14 +938,15 @@ async function testPluginCustomRPCEndpoints(): Promise<void> {
         `Faucet record verified after first faucet (count=1, exists=true, height=${faucet.height}, proof nodes=${faucet.proof.length})`
     );
 
-    console.log(`Sending second faucet to recipient (amount=${faucetAmount2}, fee=${fee})...`);
+    console.log(
+        `Sending second faucet to recipient (amount from pluginConfig=${faucetConfiguredAmount}, fee=${fee})...`
+    );
     height = await getHeight(QUERY_RPC_URL);
     console.log(`Current height: ${height}`);
     txHash = await sendFaucetTx(
         QUERY_RPC_URL,
         recipientKey,
         recipientAddr,
-        faucetAmount2,
         fee,
         NETWORK_ID,
         CHAIN_ID,
@@ -943,8 +960,8 @@ async function testPluginCustomRPCEndpoints(): Promise<void> {
     }
     console.log('Second faucet transaction confirmed!');
 
-    // after the second faucet, count should be 2 and totalAmount the sum of both
-    const wantTotal = faucetAmount1 + faucetAmount2;
+    // after the second faucet, count should be 2 and totalAmount twice the configured faucet amount
+    const wantTotal = 2n * faucetConfiguredAmount;
     console.log('Waiting for faucet record to reflect the second faucet (count=2)...');
     faucet = await pollFaucetRecordUntil(PLUGIN_RPC_URL, recipientAddr, 2n, recordTimeout);
     console.log(
@@ -998,7 +1015,6 @@ async function testPluginCustomRPCEndpoints(): Promise<void> {
         QUERY_RPC_URL,
         adminKey,
         adminAddr,
-        100000000n,
         fee,
         NETWORK_ID,
         CHAIN_ID,
@@ -1193,7 +1209,6 @@ async function testFaucetProofTamperDetected(): Promise<void> {
         QUERY_RPC_URL,
         recipientKey,
         recipientAddr,
-        1000000000n,
         10000n,
         NETWORK_ID,
         CHAIN_ID,

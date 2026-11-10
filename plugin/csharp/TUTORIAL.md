@@ -37,13 +37,13 @@ message MessageReward {
 
 // MessageFaucet is a test-only transaction that mints tokens to any address
 // No balance check required - just mints tokens for testing purposes
+// NOTE: there is intentionally NO `amount` field. The minted amount is operator-controlled via
+// config.json `pluginConfig.faucetAmount` (see Step 6b), not supplied per-transaction over RPC.
 message MessageFaucet {
   // signer_address: the address signing this transaction (for auth)
   bytes signer_address = 1; // @gotags: json:"signerAddress"
   // recipient_address: who receives the tokens
   bytes recipient_address = 2; // @gotags: json:"recipientAddress"
-  // amount: tokens to mint
-  uint64 amount = 3;
 }
 ```
 
@@ -155,12 +155,8 @@ private PluginCheckResponse CheckMessageFaucet(MessageFaucet msg)
         return new PluginCheckResponse { Error = ErrInvalidAddress() };
     }
 
-    // Validate amount - must be greater than zero.
-    // Zero-amount transactions are meaningless and waste block space.
-    if (msg.Amount == 0)
-    {
-        return new PluginCheckResponse { Error = ErrInvalidAmount() };
-    }
+    // NOTE: there is no amount to validate here - the faucet mints a fixed, operator-controlled
+    // amount (pluginConfig.faucetAmount), which is validated once at startup (see Step 6b).
 
     // Build and return the successful check response:
     // - Recipient: who receives funds (used for indexing/notifications)
@@ -323,7 +319,9 @@ private async Task<PluginDeliverResponse> DeliverMessageFaucetAsync(MessageFauce
     // CORE LOGIC: Add the faucet amount to the recipient's balance.
     // This is where tokens are "minted" - we simply increase the balance.
     // No balance check needed because faucet creates tokens from nothing.
-    recipient.Amount += msg.Amount;
+    // The amount is NOT taken from the message; it comes from the operator-controlled
+    // pluginConfig.faucetAmount, decoded + validated once at startup (see Step 6b).
+    recipient.Amount += Plugin.Settings!.FaucetAmount;
 
     // Build the write request to persist state changes.
     // Sets contains key-value pairs to write; Deletes would remove keys.
@@ -617,6 +615,96 @@ cd plugin/csharp
 make build
 ```
 
+## Step 6b: Configure the faucet amount via `pluginConfig`
+
+The faucet amount is **operator-controlled**, not supplied per-transaction. It is read from the
+node's `config.json` `pluginConfig` field, which Canopy forwards verbatim to the plugin during the
+handshake. `pluginConfig` is intentionally typed as *any* JSON on the node side, so each plugin can
+define its own schema and validate it at startup.
+
+### How it flows
+
+1. **Node config** (`~/.canopy/config.json`) carries an opaque `pluginConfig` JSON value:
+
+   ```json
+   {
+     "plugin": "csharp",
+     "pluginConfig": { "faucetAmount": 1000000000 }
+   }
+   ```
+
+2. **Canopy core** (`lib/config.go` `MainConfig.PluginConfig`) reads it as raw JSON and forwards it
+   to the plugin in the handshake response (`PluginFSMConfig.plugin_config`). Core never inspects it.
+
+3. **The plugin** decodes + validates it at startup. The base SDK (`src/CanopyPlugin/config.cs`)
+   defines the expected shape and the single validation entry point, and `src/CanopyPlugin/plugin.cs`
+   stores the result on the running plugin:
+
+   ```csharp
+   // Config gains an opaque pluginConfig field (any JSON) in src/CanopyPlugin/config.cs
+   public class Config
+   {
+       public int ChainId { get; set; } = 1;
+       public string DataDirPath { get; set; } = "/tmp/plugin/";
+       public string RpcAddress { get; set; } = "0.0.0.0:50010";
+       public JsonElement? PluginConfig { get; set; }
+   }
+
+   // PluginSettings is the typed, validated shape the plugin expects
+   public class PluginSettings
+   {
+       public ulong FaucetAmount { get; set; }
+
+       // ParsePluginConfig decodes + validates the forwarded JSON at startup; a malformed blob throws
+       // so the plugin fails fast, satisfying "validate it is in the expected form".
+       public static PluginSettings ParsePluginConfig(byte[] raw) { /* ... */ }
+   }
+   ```
+
+   `HandshakeAsync` (in `src/CanopyPlugin/plugin.cs`) calls
+   `PluginSettings.ParsePluginConfig(response.Config.PluginConfig.ToByteArray())` and stores the result
+   on `Settings`, so handlers can read `Plugin.Settings!.FaucetAmount`. An invalid blob is fatal: the
+   plugin logs and calls `Environment.Exit(1)`.
+
+### Require a non-zero faucet amount (tutorial validation)
+
+Because this plugin's faucet is useless without a configured amount, extend `ParsePluginConfig` to
+reject a missing/zero `faucetAmount` so the plugin fails fast at startup:
+
+```csharp
+public static PluginSettings ParsePluginConfig(byte[] raw)
+{
+    if (raw == null || raw.Length == 0)
+    {
+        throw new InvalidOperationException(
+            "missing pluginConfig (expected { \"faucetAmount\": <uint64> })");
+    }
+
+    PluginSettings? settings;
+    try
+    {
+        settings = JsonSerializer.Deserialize<PluginSettings>(raw, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        });
+    }
+    catch (JsonException ex)
+    {
+        throw new InvalidOperationException($"invalid pluginConfig: {ex.Message}", ex);
+    }
+
+    if (settings == null || settings.FaucetAmount == 0)
+    {
+        throw new InvalidOperationException("faucetAmount must be greater than zero");
+    }
+
+    return settings;
+}
+```
+
+The tutorial test (`tutorial/RpcTest.cs`) asserts the faucet mints exactly this configured amount
+(`FaucetConfiguredAmount`), proving the amount comes from `pluginConfig` and not from the RPC request.
+
 ## Step 7: Running Canopy with the Plugin
 
 There are two ways to run Canopy with the C# plugin: locally or with Docker.
@@ -636,16 +724,20 @@ canopy start
 
 #### 2. Enable the C# plugin
 
-Edit `~/.canopy/config.json` and add or modify the `plugin` field to `"csharp"`:
+Edit `~/.canopy/config.json` and add or modify the `plugin` field to `"csharp"`, and add the opaque
+`pluginConfig` the plugin expects (`faucetAmount`):
 
 ```json
 {
   "plugin": "csharp",
+  "pluginConfig": { "faucetAmount": 1000000000 },
   ...
 }
 ```
 
 **Note**: The `plugin` field should be at the top level of the JSON configuration.
+
+**Note**: `pluginConfig` is an opaque (any) JSON value that Canopy forwards to the plugin unchanged. For this tutorial the C# plugin expects `{ "faucetAmount": <uint64> }` and validates it at startup (see Step 6b); with the stricter tutorial validation the plugin refuses to start if it is missing or `faucetAmount` is zero.
 
 #### 3. Start Canopy
 

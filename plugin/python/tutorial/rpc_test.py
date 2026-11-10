@@ -39,6 +39,12 @@ NETWORK_ID = 1
 CHAIN_ID = 1
 TEST_PASSWORD = "testpassword123"
 
+# FAUCET_CONFIGURED_AMOUNT is the fixed amount (uCNPY) the plugin mints per faucet transaction. The
+# faucet amount is NO LONGER supplied over RPC; it is operator-controlled via config.json
+# `pluginConfig.faucetAmount` (forwarded to the plugin at handshake — see TUTORIAL.md). Keep this
+# constant in sync with the `faucetAmount` configured in the node's config.json for these tests.
+FAUCET_CONFIGURED_AMOUNT = 1000000000  # 1000 tokens
+
 
 @dataclass
 class KeyGroup:
@@ -242,7 +248,7 @@ def build_sign_and_send_tx(
         msg = tx_pb2.MessageFaucet()
         msg.signer_address = hex_to_bytes(msg_json['signerAddress'])
         msg.recipient_address = hex_to_bytes(msg_json['recipientAddress'])
-        msg.amount = msg_json['amount']
+        # NOTE: no amount — the faucet mints the operator-controlled pluginConfig.faucetAmount
         msg_proto = msg.SerializeToString()
     else:
         raise ValueError(f"Unknown message type: {msg_type}")
@@ -291,17 +297,19 @@ def send_faucet_tx(
     rpc_url: str,
     signer_key: KeyGroup,
     recipient_addr: str,
-    amount: int,
     fee: int,
     network_id: int,
     chain_id: int,
     height: int
 ) -> str:
-    """Send a faucet transaction."""
+    """Send a faucet transaction.
+
+    Note there is no amount parameter: the minted amount comes from the plugin's
+    pluginConfig.faucetAmount, not from the caller/RPC.
+    """
     faucet_msg = {
         'signerAddress': signer_key.address,
         'recipientAddress': recipient_addr,
-        'amount': amount,
     }
     
     return build_sign_and_send_tx(rpc_url, signer_key, 'faucet', faucet_msg, fee, network_id, chain_id, height)
@@ -567,14 +575,13 @@ def test_plugin_custom_rpc_endpoints() -> None:
 
     fee = 10000
 
-    # Step 2: Faucet the recipient twice and verify the aggregated faucet record
-    faucet_amount1 = 700000000
-    faucet_amount2 = 300000000
-
-    print(f"\nStep 2: Sending first faucet to recipient (amount={faucet_amount1}, fee={fee})...")
+    # Step 2: Faucet the recipient twice and verify the aggregated faucet record. Each faucet mints
+    # the fixed pluginConfig.faucetAmount (not an RPC-supplied amount), so the record should aggregate
+    # in multiples of that configured amount.
+    print(f"\nStep 2: Sending first faucet to recipient (amount from pluginConfig={FAUCET_CONFIGURED_AMOUNT}, fee={fee})...")
     height = get_height(QUERY_RPC_URL)
     print(f"Current height: {height}")
-    tx_hash = send_faucet_tx(QUERY_RPC_URL, recipient_key, recipient_addr, faucet_amount1, fee, NETWORK_ID, CHAIN_ID, height)
+    tx_hash = send_faucet_tx(QUERY_RPC_URL, recipient_key, recipient_addr, fee, NETWORK_ID, CHAIN_ID, height)
     print(f"First faucet transaction sent: {tx_hash}")
 
     print("Waiting for first faucet transaction to be confirmed...")
@@ -582,22 +589,23 @@ def test_plugin_custom_rpc_endpoints() -> None:
         raise Exception("First faucet tx not included within timeout")
     print("First faucet transaction confirmed!")
 
-    # after the first faucet, the record should exist with count=1 and totalAmount=faucet_amount1
+    # after the first faucet, the record should exist with count=1 and totalAmount=FAUCET_CONFIGURED_AMOUNT
     print(f"Querying plugin endpoint GET /v1/query/faucets?address={recipient_addr} ...")
     faucet = poll_faucet_record(plugin_rpc_url, recipient_addr, record_timeout)
     print(f"Faucet record after first faucet: recipient={faucet.get('recipientAddress')} "
           f"totalAmount={faucet.get('totalAmount')} count={faucet.get('count')}")
     assert faucet.get('count') == 1, f"faucet count after first faucet = {faucet.get('count')}, want 1"
-    assert faucet.get('totalAmount') == faucet_amount1, \
-        f"faucet totalAmount after first faucet = {faucet.get('totalAmount')}, want {faucet_amount1}"
+    assert faucet.get('totalAmount') == FAUCET_CONFIGURED_AMOUNT, \
+        (f"faucet totalAmount after first faucet = {faucet.get('totalAmount')}, "
+         f"want pluginConfig.faucetAmount={FAUCET_CONFIGURED_AMOUNT}")
     assert faucet.get('recipientAddress', '').lower() == recipient_addr.lower(), \
         f"faucet recipientAddress = {faucet.get('recipientAddress')}, want {recipient_addr}"
     print("Faucet record verified after first faucet (count=1)")
 
-    print(f"Sending second faucet to recipient (amount={faucet_amount2}, fee={fee})...")
+    print(f"Sending second faucet to recipient (amount from pluginConfig={FAUCET_CONFIGURED_AMOUNT}, fee={fee})...")
     height = get_height(QUERY_RPC_URL)
     print(f"Current height: {height}")
-    tx_hash = send_faucet_tx(QUERY_RPC_URL, recipient_key, recipient_addr, faucet_amount2, fee, NETWORK_ID, CHAIN_ID, height)
+    tx_hash = send_faucet_tx(QUERY_RPC_URL, recipient_key, recipient_addr, fee, NETWORK_ID, CHAIN_ID, height)
     print(f"Second faucet transaction sent: {tx_hash}")
 
     print("Waiting for second faucet transaction to be confirmed...")
@@ -605,8 +613,8 @@ def test_plugin_custom_rpc_endpoints() -> None:
         raise Exception("Second faucet tx not included within timeout")
     print("Second faucet transaction confirmed!")
 
-    # after the second faucet, count should be 2 and totalAmount the sum of both
-    want_total = faucet_amount1 + faucet_amount2
+    # after the second faucet, count should be 2 and totalAmount twice the configured faucet amount
+    want_total = 2 * FAUCET_CONFIGURED_AMOUNT
     print("Waiting for faucet record to reflect the second faucet (count=2)...")
     faucet = poll_faucet_record_until(plugin_rpc_url, recipient_addr, 2, record_timeout)
     print(f"Faucet record after second faucet: recipient={faucet.get('recipientAddress')} "
@@ -649,7 +657,7 @@ def test_plugin_custom_rpc_endpoints() -> None:
     print("\nStep 3: Funding admin via faucet so it can pay the reward fee...")
     height = get_height(QUERY_RPC_URL)
     print(f"Current height: {height}")
-    tx_hash = send_faucet_tx(QUERY_RPC_URL, admin_key, admin_addr, 100000000, fee, NETWORK_ID, CHAIN_ID, height)
+    tx_hash = send_faucet_tx(QUERY_RPC_URL, admin_key, admin_addr, fee, NETWORK_ID, CHAIN_ID, height)
     print(f"Admin faucet transaction sent: {tx_hash}")
 
     print("Waiting for admin faucet transaction to be confirmed...")
@@ -759,7 +767,7 @@ def test_faucet_proof_tamper_detected() -> None:
     print(f"Created recipient account: {recipient_addr}")
 
     height = get_height(QUERY_RPC_URL)
-    tx_hash = send_faucet_tx(QUERY_RPC_URL, recipient_key, recipient_addr, 1000000000, 10000, NETWORK_ID, CHAIN_ID, height)
+    tx_hash = send_faucet_tx(QUERY_RPC_URL, recipient_key, recipient_addr, 10000, NETWORK_ID, CHAIN_ID, height)
     print(f"Faucet transaction sent: {tx_hash}")
     if not wait_for_tx_inclusion(QUERY_RPC_URL, recipient_addr, tx_hash, tx_timeout):
         raise Exception("faucet tx not included within timeout")
@@ -823,17 +831,16 @@ def test_plugin_transactions() -> None:
     # Get account 1's key for signing
     account1_key = keystore_get_key(ADMIN_RPC_URL, account1_addr, TEST_PASSWORD)
     
-    # Step 2: Use faucet to add balance to account 1
+    # Step 2: Use faucet to add balance to account 1. The faucet amount is NOT passed here; it is
+    # taken from the plugin's pluginConfig.faucetAmount, so we assert the minted amount matches it.
     print("\nStep 2: Using faucet to add balance to account 1...")
     
-    faucet_amount = 1000000000  # 1000 tokens
     faucet_fee = 10000
     
     faucet_tx_hash = send_faucet_tx(
         QUERY_RPC_URL,
         account1_key,
         account1_addr,
-        faucet_amount,
         faucet_fee,
         NETWORK_ID,
         CHAIN_ID,
@@ -857,6 +864,13 @@ def test_plugin_transactions() -> None:
     bal1_after_faucet = get_account_balance(QUERY_RPC_URL, account1_addr)
     bal2_after_faucet = get_account_balance(QUERY_RPC_URL, account2_addr)
     print(f"Balances after faucet - Account 1: {bal1_after_faucet}, Account 2: {bal2_after_faucet}")
+
+    # Validate the faucet minted exactly pluginConfig.faucetAmount (account 1 started empty), proving
+    # the amount came from the plugin's config and not from the RPC request.
+    assert bal1_after_faucet == FAUCET_CONFIGURED_AMOUNT, \
+        (f"faucet minted {bal1_after_faucet} to account 1, "
+         f"want pluginConfig.faucetAmount={FAUCET_CONFIGURED_AMOUNT}")
+    print(f"Faucet minted the configured pluginConfig.faucetAmount ({FAUCET_CONFIGURED_AMOUNT}) as expected")
     
     # Step 3: Send tokens from account 1 to account 2
     print("\nStep 3: Sending tokens from account 1 to account 2...")

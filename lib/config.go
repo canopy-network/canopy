@@ -77,6 +77,7 @@ type MainConfig struct {
 	AutoUpdateRepoOwner string                 `json:"autoUpdateRepoOwner"` // GitHub repo owner for core auto-updates (e.g., "canopy-network")
 	AutoUpdateRepoName  string                 `json:"autoUpdateRepoName"`  // GitHub repo name for core auto-updates (e.g., "canopy")
 	Plugin              string                 `json:"plugin"`              // the configured plugin to use
+	PluginConfig        json.RawMessage        `json:"pluginConfig"`        // opaque, plugin-defined configuration (any JSON) forwarded verbatim to the plugin at handshake; Canopy core never inspects it
 	PluginTimeoutMS     int                    `json:"pluginTimeoutMS"`     // plugin request timeout in milliseconds
 	PluginAutoUpdate    PluginAutoUpdateConfig `json:"pluginAutoUpdate"`    // plugin auto-update configuration
 }

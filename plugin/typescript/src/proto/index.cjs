@@ -2845,6 +2845,7 @@ $root.types = (function() {
          * @memberof types
          * @interface IPluginFSMConfig
          * @property {types.IPluginConfig|null} [config] PluginFSMConfig config
+         * @property {Uint8Array|null} [pluginConfig] PluginFSMConfig pluginConfig
          */
 
         /**
@@ -2869,6 +2870,14 @@ $root.types = (function() {
          * @instance
          */
         PluginFSMConfig.prototype.config = null;
+
+        /**
+         * PluginFSMConfig pluginConfig.
+         * @member {Uint8Array} pluginConfig
+         * @memberof types.PluginFSMConfig
+         * @instance
+         */
+        PluginFSMConfig.prototype.pluginConfig = $util.newBuffer([]);
 
         /**
          * Creates a new PluginFSMConfig instance using the specified properties.
@@ -2896,6 +2905,8 @@ $root.types = (function() {
                 writer = $Writer.create();
             if (message.config != null && Object.hasOwnProperty.call(message, "config"))
                 $root.types.PluginConfig.encode(message.config, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.pluginConfig != null && Object.hasOwnProperty.call(message, "pluginConfig"))
+                writer.uint32(/* id 2, wireType 2 =*/18).bytes(message.pluginConfig);
             return writer;
         };
 
@@ -2934,6 +2945,10 @@ $root.types = (function() {
                 switch (tag >>> 3) {
                 case 1: {
                         message.config = $root.types.PluginConfig.decode(reader, reader.uint32());
+                        break;
+                    }
+                case 2: {
+                        message.pluginConfig = reader.bytes();
                         break;
                     }
                 default:
@@ -2976,6 +2991,9 @@ $root.types = (function() {
                 if (error)
                     return "config." + error;
             }
+            if (message.pluginConfig != null && message.hasOwnProperty("pluginConfig"))
+                if (!(message.pluginConfig && typeof message.pluginConfig.length === "number" || $util.isString(message.pluginConfig)))
+                    return "pluginConfig: buffer expected";
             return null;
         };
 
@@ -2996,6 +3014,11 @@ $root.types = (function() {
                     throw TypeError(".types.PluginFSMConfig.config: object expected");
                 message.config = $root.types.PluginConfig.fromObject(object.config);
             }
+            if (object.pluginConfig != null)
+                if (typeof object.pluginConfig === "string")
+                    $util.base64.decode(object.pluginConfig, message.pluginConfig = $util.newBuffer($util.base64.length(object.pluginConfig)), 0);
+                else if (object.pluginConfig.length >= 0)
+                    message.pluginConfig = object.pluginConfig;
             return message;
         };
 
@@ -3012,10 +3035,20 @@ $root.types = (function() {
             if (!options)
                 options = {};
             var object = {};
-            if (options.defaults)
+            if (options.defaults) {
                 object.config = null;
+                if (options.bytes === String)
+                    object.pluginConfig = "";
+                else {
+                    object.pluginConfig = [];
+                    if (options.bytes !== Array)
+                        object.pluginConfig = $util.newBuffer(object.pluginConfig);
+                }
+            }
             if (message.config != null && message.hasOwnProperty("config"))
                 object.config = $root.types.PluginConfig.toObject(message.config, options);
+            if (message.pluginConfig != null && message.hasOwnProperty("pluginConfig"))
+                object.pluginConfig = options.bytes === String ? $util.base64.encode(message.pluginConfig, 0, message.pluginConfig.length) : options.bytes === Array ? Array.prototype.slice.call(message.pluginConfig) : message.pluginConfig;
             return object;
         };
 

@@ -28,6 +28,7 @@ type Plugin struct {
 	requestContract map[uint64]*Contract                  // maps request IDs to their contract context for concurrent operations
 	l               sync.Mutex                            // thread safety
 	config          Config                                // general app config
+	Settings        *PluginSettings                       // the typed, validated form of the opaque pluginConfig (set at handshake)
 }
 
 // socketPath is the name of the plugin socket exposed by the base SDK
@@ -90,9 +91,17 @@ func (p *Plugin) Handshake() *PluginError {
 	if !ok {
 		return ErrUnexpectedFSMToPlugin(reflect.TypeOf(response))
 	}
-	// set pluginConfig
+	// set the fsm config
 	p.fsmConfig = wrapper.Config
-	// handshake conmplete
+	// decode + validate the opaque pluginConfig the node forwarded from its config.json. This is the
+	// 'expected form' check: a malformed blob fails the handshake (and StartPlugin log.Fatals on it).
+	settings, pErr := ParsePluginConfig(wrapper.Config.GetPluginConfig())
+	if pErr != nil {
+		return pErr
+	}
+	p.Settings = settings
+	log.Printf("Loaded pluginConfig: faucetAmount=%d", settings.FaucetAmount)
+	// handshake complete
 	return nil
 }
 
@@ -492,6 +501,36 @@ type Config struct {
 	DataDirPath string `json:"dataDirPath"`
 	// RPCAddress is the listen address for the plugin's own HTTP server that exposes custom RPC endpoints
 	RPCAddress string `json:"rpcAddress"`
+	// PluginConfig is an opaque, plugin-defined configuration value (any JSON). It mirrors the node
+	// config.json `pluginConfig` field; Canopy forwards that value to the plugin at handshake, and the
+	// plugin decodes + validates it into its own expected shape (see PluginSettings) at startup.
+	PluginConfig any `json:"pluginConfig"`
+}
+
+// PluginSettings is the typed, validated shape the plugin expects the opaque `pluginConfig` to take.
+// Keeping `pluginConfig` as `any` on the wire lets each plugin define its own schema while still
+// failing fast at startup if the operator supplied something malformed.
+type PluginSettings struct {
+	// FaucetAmount is the fixed amount (in uCNPY) minted per faucet transaction. It is operator
+	// controlled via config.json `pluginConfig.faucetAmount` rather than being supplied per request
+	// over RPC, so the node operator — not the caller — decides how much the faucet dispenses.
+	FaucetAmount uint64 `json:"faucetAmount"`
+}
+
+// ParsePluginConfig() decodes the opaque pluginConfig (raw JSON forwarded from the node's config.json)
+// into the plugin's expected PluginSettings shape and validates it. This is the single place where the
+// plugin asserts the operator-supplied blob is "in the expected form"; it is called once at startup.
+func ParsePluginConfig(raw []byte) (*PluginSettings, *PluginError) {
+	settings := new(PluginSettings)
+	// a missing pluginConfig is treated as empty settings so the base plugin still starts
+	if len(raw) == 0 {
+		return settings, nil
+	}
+	// the blob must be a well-formed JSON object matching PluginSettings
+	if err := json.Unmarshal(raw, settings); err != nil {
+		return nil, ErrInvalidPluginConfig(err.Error())
+	}
+	return settings, nil
 }
 
 // DefaultConfig() returns the default configuration

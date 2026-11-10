@@ -33,6 +33,12 @@ namespace CanopyPlugin.Tutorial
         private const ulong ChainId = 1;
         private const string TestPassword = "testpassword123";
 
+        // FaucetConfiguredAmount is the fixed amount (uCNPY) the plugin mints per faucet transaction. The
+        // faucet amount is NO LONGER supplied over RPC; it is operator-controlled via config.json
+        // `pluginConfig.faucetAmount` (forwarded to the plugin at handshake - see TUTORIAL.md). Keep this
+        // constant in sync with the `faucetAmount` configured in the node's config.json for these tests.
+        private const ulong FaucetConfiguredAmount = 1000000000; // 1000 tokens
+
         private static readonly HttpClient HttpClient = new()
         {
             Timeout = TimeSpan.FromSeconds(30)
@@ -73,18 +79,17 @@ namespace CanopyPlugin.Tutorial
             // Get account 1's key for signing
             var account1Key = await KeystoreGetKeyAsync(AdminRpcUrl, account1Addr, TestPassword);
 
-            // Step 2: Use faucet to add balance to account 1
+            // Step 2: Use faucet to add balance to account 1. The faucet amount is NOT passed here; it is
+            // taken from the plugin's pluginConfig.faucetAmount, so we assert the minted amount matches it.
             Console.WriteLine("\nStep 2: Using faucet to add balance to account 1...");
 
-            const ulong faucetAmount = 1000000000;  // 1000 tokens
             const ulong faucetFee = 10000;
-            Console.WriteLine($"  Amount: {faucetAmount}, Fee: {faucetFee}");
+            Console.WriteLine($"  Amount (from pluginConfig): {FaucetConfiguredAmount}, Fee: {faucetFee}");
 
             var faucetTxHash = await SendFaucetTxAsync(
                 QueryRpcUrl,
                 account1Key,
                 account1Addr,
-                faucetAmount,
                 faucetFee,
                 NetworkId,
                 ChainId,
@@ -106,6 +111,11 @@ namespace CanopyPlugin.Tutorial
             var bal1AfterFaucet = await GetAccountBalanceAsync(QueryRpcUrl, account1Addr);
             var bal2AfterFaucet = await GetAccountBalanceAsync(QueryRpcUrl, account2Addr);
             Console.WriteLine($"  Balances after faucet - Account 1: {bal1AfterFaucet}, Account 2: {bal2AfterFaucet}");
+
+            // Validate the faucet minted exactly pluginConfig.faucetAmount (account 1 started empty),
+            // proving the amount came from the plugin's config and not from the RPC request.
+            Assert.Equal(FaucetConfiguredAmount, bal1AfterFaucet);
+            Console.WriteLine($"  Faucet minted the configured pluginConfig.faucetAmount ({FaucetConfiguredAmount}) as expected");
 
             // Step 3: Send tokens from account 1 to account 2
             Console.WriteLine("\nStep 3: Sending tokens from account 1 to account 2...");
@@ -248,14 +258,13 @@ namespace CanopyPlugin.Tutorial
 
             const ulong fee = 10000;
 
-            // Step 2: Faucet the recipient twice and verify the aggregated faucet record
-            const ulong faucetAmount1 = 700000000;
-            const ulong faucetAmount2 = 300000000;
-
-            Console.WriteLine($"\nStep 2: Sending first faucet to recipient (amount={faucetAmount1}, fee={fee})...");
+            // Step 2: Faucet the recipient twice and verify the aggregated faucet record. Each faucet mints
+            // the fixed pluginConfig.faucetAmount (not an RPC-supplied amount), so the record should
+            // aggregate in multiples of that configured amount.
+            Console.WriteLine($"\nStep 2: Sending first faucet to recipient (amount from pluginConfig={FaucetConfiguredAmount}, fee={fee})...");
             var height = await GetHeightAsync(QueryRpcUrl);
             Console.WriteLine($"  Current height: {height}");
-            var txHash = await SendFaucetTxAsync(QueryRpcUrl, recipientKey, recipientAddr, faucetAmount1, fee, NetworkId, ChainId, height);
+            var txHash = await SendFaucetTxAsync(QueryRpcUrl, recipientKey, recipientAddr, fee, NetworkId, ChainId, height);
             Console.WriteLine($"  First faucet transaction sent: {txHash}");
 
             Console.WriteLine("  Waiting for first faucet transaction to be confirmed...");
@@ -263,13 +272,13 @@ namespace CanopyPlugin.Tutorial
             Assert.True(included, "First faucet tx not included within timeout");
             Console.WriteLine("  First faucet transaction confirmed!");
 
-            // after the first faucet, the record should exist with count=1 and totalAmount=faucetAmount1
+            // after the first faucet, the record should exist with count=1 and totalAmount=FaucetConfiguredAmount
             Console.WriteLine($"  Querying plugin endpoint GET /v1/query/faucets?address={recipientAddr} ...");
             var faucet = await PollFaucetRecordAsync(pluginRpcUrl, recipientAddr, recordTimeout);
             Assert.NotNull(faucet);
             Console.WriteLine($"  Faucet record after first faucet: recipient={faucet!.RecipientAddress} totalAmount={faucet.TotalAmount} count={faucet.Count}");
             Assert.Equal(1UL, faucet.Count);
-            Assert.Equal(faucetAmount1, faucet.TotalAmount);
+            Assert.Equal(FaucetConfiguredAmount, faucet.TotalAmount);
             Assert.Equal(recipientAddr.ToLowerInvariant(), faucet.RecipientAddress.ToLowerInvariant());
             Console.WriteLine("  Faucet record verified after first faucet (count=1)");
 
@@ -280,10 +289,10 @@ namespace CanopyPlugin.Tutorial
             await AssertFaucetProofAsync(pluginRpcUrl, recipientAddr);
             Console.WriteLine("  By-address faucet proof verified (stateRoot, height>0, exists=true, non-empty proof)");
 
-            Console.WriteLine($"\n  Sending second faucet to recipient (amount={faucetAmount2}, fee={fee})...");
+            Console.WriteLine($"\n  Sending second faucet to recipient (amount from pluginConfig={FaucetConfiguredAmount}, fee={fee})...");
             height = await GetHeightAsync(QueryRpcUrl);
             Console.WriteLine($"  Current height: {height}");
-            txHash = await SendFaucetTxAsync(QueryRpcUrl, recipientKey, recipientAddr, faucetAmount2, fee, NetworkId, ChainId, height);
+            txHash = await SendFaucetTxAsync(QueryRpcUrl, recipientKey, recipientAddr, fee, NetworkId, ChainId, height);
             Console.WriteLine($"  Second faucet transaction sent: {txHash}");
 
             Console.WriteLine("  Waiting for second faucet transaction to be confirmed...");
@@ -291,8 +300,8 @@ namespace CanopyPlugin.Tutorial
             Assert.True(included, "Second faucet tx not included within timeout");
             Console.WriteLine("  Second faucet transaction confirmed!");
 
-            // after the second faucet, count should be 2 and totalAmount the sum of both
-            const ulong wantTotal = faucetAmount1 + faucetAmount2;
+            // after the second faucet, count should be 2 and totalAmount twice the configured faucet amount
+            const ulong wantTotal = 2 * FaucetConfiguredAmount;
             Console.WriteLine("  Waiting for faucet record to reflect the second faucet (count=2)...");
             faucet = await PollFaucetRecordUntilAsync(pluginRpcUrl, recipientAddr, 2, recordTimeout);
             Assert.NotNull(faucet);
@@ -316,7 +325,7 @@ namespace CanopyPlugin.Tutorial
             Console.WriteLine("\nStep 3: Funding admin via faucet so it can pay the reward fee...");
             height = await GetHeightAsync(QueryRpcUrl);
             Console.WriteLine($"  Current height: {height}");
-            txHash = await SendFaucetTxAsync(QueryRpcUrl, adminKey, adminAddr, 100000000, fee, NetworkId, ChainId, height);
+            txHash = await SendFaucetTxAsync(QueryRpcUrl, adminKey, adminAddr, fee, NetworkId, ChainId, height);
             Console.WriteLine($"  Admin faucet transaction sent: {txHash}");
 
             Console.WriteLine("  Waiting for admin faucet transaction to be confirmed...");
@@ -429,7 +438,7 @@ namespace CanopyPlugin.Tutorial
             Console.WriteLine($"  Created recipient account: {recipientAddr}");
 
             var height = await GetHeightAsync(QueryRpcUrl);
-            var txHash = await SendFaucetTxAsync(QueryRpcUrl, recipientKey, recipientAddr, 1000000000, 10000, NetworkId, ChainId, height);
+            var txHash = await SendFaucetTxAsync(QueryRpcUrl, recipientKey, recipientAddr, 10000, NetworkId, ChainId, height);
             Console.WriteLine($"  Faucet transaction sent: {txHash}");
 
             var included = await WaitForTxInclusionAsync(QueryRpcUrl, recipientAddr, txHash, txTimeout);
@@ -638,23 +647,23 @@ namespace CanopyPlugin.Tutorial
         }
 
         /// <summary>
-        /// Send a faucet transaction.
+        /// Send a faucet transaction. Note there is no amount parameter: the minted amount comes from the
+        /// plugin's pluginConfig.faucetAmount, not from the caller/RPC.
         /// </summary>
         private static async Task<string> SendFaucetTxAsync(
             string rpcUrl,
             KeyGroup signerKey,
             string recipientAddr,
-            ulong amount,
             ulong fee,
             ulong networkId,
             ulong chainId,
             ulong height)
         {
+            // Create the faucet message (no amount - it is set by pluginConfig.faucetAmount)
             var faucetMsg = new Dictionary<string, object>
             {
                 ["signerAddress"] = signerKey.Address,
-                ["recipientAddress"] = recipientAddr,
-                ["amount"] = amount
+                ["recipientAddress"] = recipientAddr
             };
 
             return await BuildSignAndSendTxAsync(rpcUrl, signerKey, "faucet", faucetMsg, fee, networkId, chainId, height);
@@ -750,8 +759,7 @@ namespace CanopyPlugin.Tutorial
                 "faucet" => new MessageFaucet
                 {
                     SignerAddress = ByteString.CopyFrom(BLSCrypto.HexToBytes((string)msgJson["signerAddress"])),
-                    RecipientAddress = ByteString.CopyFrom(BLSCrypto.HexToBytes((string)msgJson["recipientAddress"])),
-                    Amount = (ulong)msgJson["amount"]
+                    RecipientAddress = ByteString.CopyFrom(BLSCrypto.HexToBytes((string)msgJson["recipientAddress"]))
                 }.ToByteArray(),
                 _ => throw new ArgumentException($"Unknown message type: {msgType}")
             };

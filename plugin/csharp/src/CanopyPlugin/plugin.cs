@@ -32,6 +32,11 @@ namespace CanopyPlugin
         // Config exposes the general app config so builders can back their own custom RPC endpoints
         public Config Config => _config;
 
+        // Settings is the typed, validated form of the opaque pluginConfig the node forwarded at
+        // handshake (see HandshakeAsync). Handlers read it (e.g. Settings.FaucetAmount) to drive
+        // operator-controlled behavior instead of trusting per-transaction RPC input.
+        public PluginSettings? Settings { get; private set; }
+
         public Plugin(Config config)
         {
             _config = config;
@@ -96,6 +101,20 @@ namespace CanopyPlugin
             if (response?.Config != null)
             {
                 _fsmConfig = response.Config;
+
+                // decode + validate the opaque pluginConfig the node forwarded from its config.json. This
+                // is the 'expected form' check: a malformed blob fails the handshake and the plugin exits.
+                try
+                {
+                    Settings = PluginSettings.ParsePluginConfig(response.Config.PluginConfig.ToByteArray());
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"FATAL: invalid pluginConfig: {ex.Message}");
+                    Environment.Exit(1);
+                }
+
+                Console.WriteLine($"Loaded pluginConfig: faucetAmount={Settings!.FaucetAmount}");
                 Console.WriteLine("Handshake complete");
             }
         }

@@ -46,21 +46,23 @@ type Plugin struct {
 	l             sync.Mutex                            // thread safety
 	log           LoggerI                               // the logger associated with the plugin
 	timeout       time.Duration                         // plugin request timeout
+	pluginConfig  []byte                                // opaque `pluginConfig` JSON from the node config, forwarded to the plugin at handshake
 }
 
 // NewPlugin() creates and starts a plguin
-func NewPlugin(conn net.Conn, log LoggerI, timeout time.Duration) (p *Plugin) {
+func NewPlugin(conn net.Conn, log LoggerI, timeout time.Duration, pluginConfig []byte) (p *Plugin) {
 	if timeout <= 0 {
 		timeout = time.Second
 	}
 	// constructs the new plugin
 	p = &Plugin{
-		conn:        conn,
-		pending:     map[uint64]chan isPluginToFSM_Payload{},
-		requestFSMs: map[uint64]PluginCompatibleFSM{},
-		l:           sync.Mutex{},
-		log:         log,
-		timeout:     timeout,
+		conn:         conn,
+		pending:      map[uint64]chan isPluginToFSM_Payload{},
+		requestFSMs:  map[uint64]PluginCompatibleFSM{},
+		l:            sync.Mutex{},
+		log:          log,
+		timeout:      timeout,
+		pluginConfig: pluginConfig,
 	}
 	// debug log plugin creation
 	log.Debugf("Creating new plugin with connection: %s", conn.RemoteAddr())
@@ -325,10 +327,11 @@ func (p *Plugin) handleConfigMessage(msg *PluginToFSM) ErrorI {
 		p.log.Debugf("handleConfigMessage() failed to Register plugin schema: %v", err)
 		return err
 	}
-	// ack the config - send FSMToPlugin config response
+	// ack the config - send FSMToPlugin config response, forwarding the opaque node-supplied
+	// `pluginConfig` JSON so the plugin can decode + validate it into its own expected shape
 	response := &FSMToPlugin{
 		Id:      msg.Id,
-		Payload: &FSMToPlugin_Config{Config: &PluginFSMConfig{Config: m.Config}},
+		Payload: &FSMToPlugin_Config{Config: &PluginFSMConfig{Config: m.Config, PluginConfig: p.pluginConfig}},
 	}
 	// debug log sending response
 	p.log.Debugf("handleConfigMessage() sending config acknowledgment for message ID %d", msg.Id)

@@ -37,13 +37,13 @@ message MessageReward {
 
 // MessageFaucet is a test-only transaction that mints tokens to any address
 // No balance check required - just mints tokens for testing purposes
+// NOTE: there is intentionally NO `amount` field. The minted amount is operator-controlled via
+// config.json `pluginConfig.faucetAmount` (see Step 6b), not supplied per-transaction over RPC.
 message MessageFaucet {
   // signer_address: the address signing this transaction (for auth)
   bytes signer_address = 1; // @gotags: json:"signerAddress"
   // recipient_address: who receives the tokens
   bytes recipient_address = 2; // @gotags: json:"recipientAddress"
-  // amount: tokens to mint
-  uint64 amount = 3;
 }
 ```
 
@@ -131,11 +131,8 @@ func (c *Contract) CheckMessageFaucet(msg *MessageFaucet) *PluginCheckResponse {
         return &PluginCheckResponse{Error: ErrInvalidAddress()}
     }
 
-    // Validate amount - must be greater than zero.
-    // Zero-amount transactions are meaningless and waste block space.
-    if msg.Amount == 0 {
-        return &PluginCheckResponse{Error: ErrInvalidAmount()}
-    }
+    // NOTE: there is no amount to validate here — the faucet mints a fixed, operator-controlled
+    // amount (pluginConfig.faucetAmount), which is validated once at startup (see Step 6b).
 
     // Return the check response with:
     // - Recipient: who receives funds (used for indexing/notifications)
@@ -270,7 +267,10 @@ func (c *Contract) DeliverMessageFaucet(msg *MessageFaucet) *PluginDeliverRespon
     // CORE LOGIC: Add the faucet amount to the recipient's balance.
     // This is where tokens are "minted" - we simply increase the balance.
     // No balance check needed because faucet creates tokens from nothing.
-    recipient.Amount += msg.Amount
+    // The amount is NOT taken from the message; it comes from the operator-controlled
+    // pluginConfig.faucetAmount, decoded + validated once at startup (see Step 6b).
+    faucetAmount := c.plugin.Settings.FaucetAmount
+    recipient.Amount += faucetAmount
 
     // Marshal the updated account back to protobuf bytes for storage.
     recipientBytes, err = Marshal(recipient)
@@ -569,6 +569,76 @@ cd plugin/go
 make build
 ```
 
+## Step 6b: Configure the faucet amount via `pluginConfig`
+
+The faucet amount is **operator-controlled**, not supplied per-transaction. It is read from the
+node's `config.json` `pluginConfig` field, which Canopy forwards verbatim to the plugin during the
+handshake. `pluginConfig` is intentionally typed as *any* JSON on the node side, so each plugin can
+define its own schema and validate it at startup.
+
+### How it flows
+
+1. **Node config** (`~/.canopy/config.json`) carries an opaque `pluginConfig` JSON value:
+
+   ```json
+   {
+     "plugin": "go",
+     "pluginConfig": { "faucetAmount": 1000000000 }
+   }
+   ```
+
+2. **Canopy core** (`lib/config.go` `MainConfig.PluginConfig`) reads it as raw JSON and forwards it
+   to the plugin in the handshake response (`PluginFSMConfig.plugin_config`). Core never inspects it.
+
+3. **The plugin** decodes + validates it at startup. The base SDK (`contract/plugin.go`) defines the
+   expected shape and the single validation entry point:
+
+   ```go
+   // Config gains an opaque pluginConfig field (any JSON)
+   type Config struct {
+       ChainId     uint64 `json:"chainId"`
+       DataDirPath string `json:"dataDirPath"`
+       RPCAddress  string `json:"rpcAddress"`
+       PluginConfig any    `json:"pluginConfig"`
+   }
+
+   // PluginSettings is the typed, validated shape the plugin expects
+   type PluginSettings struct {
+       FaucetAmount uint64 `json:"faucetAmount"`
+   }
+
+   // ParsePluginConfig decodes + validates the forwarded JSON at startup; a malformed blob fails
+   // the handshake (and the plugin exits), satisfying "validate it is in the expected form".
+   func ParsePluginConfig(raw []byte) (*PluginSettings, *PluginError) { ... }
+   ```
+
+   `Handshake()` calls `ParsePluginConfig(wrapper.Config.GetPluginConfig())` and stores the result on
+   `p.Settings`, so handlers can read `c.plugin.Settings.FaucetAmount`.
+
+### Require a non-zero faucet amount (tutorial validation)
+
+Because this plugin's faucet is useless without a configured amount, extend `ParsePluginConfig` to
+reject a missing/zero `faucetAmount` so the plugin fails fast at startup:
+
+```go
+func ParsePluginConfig(raw []byte) (*PluginSettings, *PluginError) {
+    settings := new(PluginSettings)
+    if len(raw) == 0 {
+        return nil, ErrInvalidPluginConfig("missing pluginConfig (expected { \"faucetAmount\": <uint64> })")
+    }
+    if err := json.Unmarshal(raw, settings); err != nil {
+        return nil, ErrInvalidPluginConfig(err.Error())
+    }
+    if settings.FaucetAmount == 0 {
+        return nil, ErrInvalidPluginConfig("faucetAmount must be greater than zero")
+    }
+    return settings, nil
+}
+```
+
+The tutorial test (`tutorial/rpc_test.go`) asserts the faucet mints exactly this configured amount
+(`faucetConfiguredAmount`), proving the amount comes from `pluginConfig` and not from the RPC request.
+
 ## Step 7: Running Canopy with the Plugin
 
 To run Canopy with the Go plugin enabled, you need to configure the `plugin` field in your Canopy configuration file.
@@ -591,11 +661,14 @@ Edit `~/.canopy/config.json` and add or modify the `plugin` field to `"go"`:
 ```json
 {
   "plugin": "go",
+  "pluginConfig": { "faucetAmount": 1000000000 },
   ...
 }
 ```
 
 **Note**: The `plugin` field should be at the top level of the JSON configuration. If it doesn't exist, add it as the first field after the opening brace.
+
+**Note**: `pluginConfig` is an opaque (any) JSON value that Canopy forwards to the plugin unchanged. For this tutorial the Go plugin expects `{ "faucetAmount": <uint64> }` and validates it at startup (see Step 6b); the plugin will refuse to start if it is missing or `faucetAmount` is zero.
 
 ### 3. Start Canopy
 

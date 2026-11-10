@@ -581,8 +581,12 @@ func (x *PluginConfig) GetCustomStatePrefixes() [][]byte {
 
 // PluginFSMConfig is the identity information of the plugin that is communicated from the fsm to the plugin
 type PluginFSMConfig struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Config        *PluginConfig          `protobuf:"bytes,1,opt,name=config,proto3" json:"config,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// config: the identity information of the plugin (echoed back from the handshake)
+	Config *PluginConfig `protobuf:"bytes,1,opt,name=config,proto3" json:"config,omitempty"`
+	// plugin_config: the opaque, user-supplied `pluginConfig` field from the node's config.json,
+	// forwarded verbatim (raw JSON bytes) so the plugin can decode + validate it at startup.
+	PluginConfig  []byte `protobuf:"bytes,2,opt,name=plugin_config,json=pluginConfig,proto3" json:"pluginConfig"` // @gotags: json:"pluginConfig"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -620,6 +624,13 @@ func (*PluginFSMConfig) Descriptor() ([]byte, []int) {
 func (x *PluginFSMConfig) GetConfig() *PluginConfig {
 	if x != nil {
 		return x.Config
+	}
+	return nil
+}
+
+func (x *PluginFSMConfig) GetPluginConfig() []byte {
+	if x != nil {
+		return x.PluginConfig
 	}
 	return nil
 }
@@ -2023,9 +2034,10 @@ const file_plugin_proto_rawDesc = "" +
 	"\x16file_descriptor_protos\x18\x05 \x03(\fR\x14fileDescriptorProtos\x122\n" +
 	"\x15transaction_type_urls\x18\x06 \x03(\tR\x13transactionTypeUrls\x12&\n" +
 	"\x0fevent_type_urls\x18\a \x03(\tR\reventTypeUrls\x122\n" +
-	"\x15custom_state_prefixes\x18\b \x03(\fR\x13customStatePrefixes\">\n" +
+	"\x15custom_state_prefixes\x18\b \x03(\fR\x13customStatePrefixes\"c\n" +
 	"\x0fPluginFSMConfig\x12+\n" +
-	"\x06config\x18\x01 \x01(\v2\x13.types.PluginConfigR\x06config\"9\n" +
+	"\x06config\x18\x01 \x01(\v2\x13.types.PluginConfigR\x06config\x12#\n" +
+	"\rplugin_config\x18\x02 \x01(\fR\fpluginConfig\"9\n" +
 	"\x14PluginGenesisRequest\x12!\n" +
 	"\fgenesis_json\x18\x01 \x01(\fR\vgenesisJson\"A\n" +
 	"\x15PluginGenesisResponse\x12(\n" +

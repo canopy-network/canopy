@@ -38,13 +38,13 @@ message MessageReward {
 
 // MessageFaucet is a test-only transaction that mints tokens to any address
 // No balance check required - just mints tokens for testing purposes
+// NOTE: there is intentionally NO `amount` field. The minted amount is operator-controlled via
+// config.json `pluginConfig.faucetAmount` (see Step 6b), not supplied per-transaction over RPC.
 message MessageFaucet {
   // signer_address: the address signing this transaction (for auth)
   bytes signer_address = 1; // @gotags: json:"signerAddress"
   // recipient_address: who receives the tokens
   bytes recipient_address = 2; // @gotags: json:"recipientAddress"
-  // amount: tokens to mint
-  uint64 amount = 3;
 }
 ```
 
@@ -142,13 +142,13 @@ def _check_message_faucet(self, msg: MessageFaucet) -> PluginCheckResponse:
     Faucet is a test transaction that mints tokens to any address without balance checks.
     
     Args:
-        msg: The faucet message containing signer_address, recipient_address, and amount
-        
+        msg: The faucet message containing signer_address and recipient_address
+
     Returns:
         PluginCheckResponse with authorized signers set
         
     Raises:
-        PluginError: If any validation fails (invalid address or amount)
+        PluginError: If any validation fails (invalid address)
     """
     # Validate signer address - all Canopy addresses are exactly 20 bytes.
     # This prevents malformed addresses from entering the mempool.
@@ -160,10 +160,8 @@ def _check_message_faucet(self, msg: MessageFaucet) -> PluginCheckResponse:
     if len(msg.recipient_address) != 20:
         raise err_invalid_address()
 
-    # Validate amount - must be greater than zero.
-    # Zero-amount transactions are meaningless and waste block space.
-    if msg.amount == 0:
-        raise err_invalid_amount()
+    # NOTE: there is no amount to validate here — the faucet mints a fixed, operator-controlled
+    # amount (pluginConfig.faucetAmount), which is validated once at startup (see Step 6b).
 
     # Build and return the successful check response:
     # - recipient: who receives funds (used for indexing/notifications)
@@ -259,7 +257,8 @@ async def _deliver_message_faucet(self, msg: MessageFaucet) -> PluginDeliverResp
     Faucet is special: it mints tokens without requiring any existing balance (for testing).
     
     Args:
-        msg: The faucet message containing recipient_address and amount to mint
+        msg: The faucet message containing recipient_address (the minted amount comes from
+            pluginConfig.faucetAmount, not from the message)
         
     Returns:
         PluginDeliverResponse with empty error field on success
@@ -313,7 +312,10 @@ async def _deliver_message_faucet(self, msg: MessageFaucet) -> PluginDeliverResp
     # CORE LOGIC: Add the faucet amount to the recipient's balance.
     # This is where tokens are "minted" - we simply increase the balance.
     # No balance check needed because faucet creates tokens from nothing.
-    recipient_account.amount += msg.amount
+    # The amount is NOT taken from the message; it comes from the operator-controlled
+    # pluginConfig.faucetAmount, decoded + validated once at startup (see Step 6b).
+    faucet_amount = self.plugin.settings.faucet_amount
+    recipient_account.amount += faucet_amount
 
     # Marshal the updated account back to protobuf bytes for storage.
     recipient_bytes_new = marshal(recipient_account)
@@ -641,6 +643,81 @@ curl 'http://localhost:50010/v1/query/rewards?height=42'
 curl 'http://localhost:50010/v1/query/rewards?address=<recipient-hex>'
 ```
 
+## Step 6b: Configure the faucet amount via `pluginConfig`
+
+The faucet amount is **operator-controlled**, not supplied per-transaction. It is read from the
+node's `config.json` `pluginConfig` field, which Canopy forwards verbatim to the plugin during the
+handshake. `pluginConfig` is intentionally typed as *any* JSON on the node side, so each plugin can
+define its own schema and validate it at startup.
+
+### How it flows
+
+1. **Node config** (`~/.canopy/config.json`) carries an opaque `pluginConfig` JSON value:
+
+   ```json
+   {
+     "plugin": "python",
+     "pluginConfig": { "faucetAmount": 1000000000 }
+   }
+   ```
+
+2. **Canopy core** (`lib/config.go` `MainConfig.PluginConfig`) reads it as raw JSON and forwards it
+   to the plugin in the handshake response (`PluginFSMConfig.plugin_config`). Core never inspects it.
+
+3. **The plugin** decodes + validates it at startup. The base SDK (`contract/plugin.py`) defines the
+   expected shape and the single validation entry point:
+
+   ```python
+   @dataclass
+   class Config:
+       chain_id: int = 1
+       data_dir_path: str = "/tmp/plugin/"
+       rpc_address: str = "0.0.0.0:50010"
+       # opaque pluginConfig mirrored from the node config.json (any JSON)
+       plugin_config: Any = None
+
+   @dataclass
+   class PluginSettings:
+       # the typed, validated shape the plugin expects pluginConfig to take
+       faucet_amount: int = 0
+
+   def parse_plugin_config(raw: bytes) -> PluginSettings:
+       """Decode + validate the forwarded JSON at startup; a malformed blob fails the handshake
+       (and the plugin exits), satisfying 'validate it is in the expected form'."""
+       ...
+   ```
+
+   The handshake (the `config` branch of `_handle_fsm_request` in `contract/plugin.py`) calls
+   `parse_plugin_config(msg.config.plugin_config)` and stores the result on `self.settings`, so
+   handlers can read `self.plugin.settings.faucet_amount`. An invalid blob is logged and the plugin
+   process exits (fail fast).
+
+### Require a non-zero faucet amount (tutorial validation)
+
+Because this plugin's faucet is useless without a configured amount, extend `parse_plugin_config` to
+reject a missing/zero `faucetAmount` so the plugin fails fast at startup:
+
+```python
+def parse_plugin_config(raw: bytes) -> PluginSettings:
+    settings = PluginSettings()
+    if not raw:
+        raise err_invalid_plugin_config('missing pluginConfig (expected { "faucetAmount": <uint64> })')
+    try:
+        data = json.loads(raw)
+    except (ValueError, TypeError) as err:
+        raise err_invalid_plugin_config(str(err))
+    if not isinstance(data, dict):
+        raise err_invalid_plugin_config("expected a JSON object")
+    settings.faucet_amount = int(data.get("faucetAmount", 0) or 0)
+    if settings.faucet_amount == 0:
+        raise err_invalid_plugin_config("faucetAmount must be greater than zero")
+    return settings
+```
+
+The tutorial test (`tutorial/rpc_test.py`) asserts the faucet mints exactly this configured amount
+(`FAUCET_CONFIGURED_AMOUNT`), proving the amount comes from `pluginConfig` and not from the RPC
+request.
+
 ## Step 7: Running Canopy with the Plugin
 
 To run Canopy with the Python plugin enabled, you need to configure the `plugin` field in your Canopy configuration file.
@@ -663,11 +740,14 @@ Edit `~/.canopy/config.json` and add or modify the `plugin` field to `"python"`:
 ```json
 {
   "plugin": "python",
+  "pluginConfig": { "faucetAmount": 1000000000 },
   ...
 }
 ```
 
 **Note**: The `plugin` field should be at the top level of the JSON configuration.
+
+**Note**: `pluginConfig` is an opaque (any) JSON value that Canopy forwards to the plugin unchanged. For this tutorial the Python plugin expects `{ "faucetAmount": <uint64> }` and validates it at startup (see Step 6b); the plugin will refuse to start if it is missing or `faucetAmount` is zero.
 
 ### 3. Start Canopy
 
