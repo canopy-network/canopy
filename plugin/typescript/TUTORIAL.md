@@ -586,6 +586,45 @@ async queryState(height: number, request: any): Promise<[any | null, IPluginErro
 
 This requires the `query` field (`= 10`) and the `PluginQueryRequest`/`PluginQueryResponse` messages added to `proto/plugin.proto`, plus routing the inbound `query` response in `ListenForInbound`/`handleMessageAsync`.
 
+For a single record you can also fetch a **verifiable proof** alongside the value. `Plugin.queryStateWithProof(height, key)` sends a detached single-key read with `prove: true` and returns a `StateProof`:
+
+```typescript
+export interface StateProof {
+    value: Uint8Array;       // the raw record bytes ('' when the key does not exist)
+    exists: boolean;         // whether the key exists in state at this height
+    proof: ProofNode[];      // Sparse-Merkle-Tree (SMT) proof of inclusion/exclusion
+    stateRoot: Uint8Array;   // committed state root the proof is rooted at
+    height: number;          // committed height the proof was taken at
+}
+
+async queryStateWithProof(height: number, key: Uint8Array): Promise<[StateProof | null, IPluginError | null]> {
+    const [response, err] = await this.sendDetachedSync({
+        query: { height, read: { keys: [{ queryId: randQueryId(), key, prove: true }] } }
+    });
+    if (err) return [null, err];
+    if (!response || !response.query) return [null, ErrUnexpectedFSMToPlugin(typeof response)];
+    const query = response.query as proto.IPluginQueryResponse;
+    if (query.error) return [null, query.error as IPluginError];
+    const out: StateProof = {
+        value: new Uint8Array(0),
+        exists: false,
+        proof: [],
+        stateRoot: query.stateRoot ?? new Uint8Array(0),
+        height: longToNumber(query.height)
+    };
+    const results = query.read?.results;
+    if (results && results.length > 0) {
+        const res = results[0];
+        out.exists = res.exists ?? false;
+        out.proof = res.proof ?? [];
+        if (res.entries && res.entries.length > 0) out.value = res.entries[0].value ?? new Uint8Array(0);
+    }
+    return [out, null];
+}
+```
+
+This relies on the regenerated protobuf fields `PluginKeyRead.prove`, `PluginReadResult.proof`/`exists`, `PluginQueryResponse.state_root`/`height`, and the new `ProofNode { bytes key = 1; bytes value = 2; int32 bitmask = 3; }` message.
+
 ### Register the endpoints
 
 The base plugin already ships a **skeleton** `src/contract/rpc.ts`: `StartRPCServer(plugin)` runs the plugin's HTTP server using node's built-in `http` module, reads the listen address from the `rpcAddress` config field (default `0.0.0.0:50010`), and registers **no routes** by default. It is already started from `src/main.ts`:
@@ -612,12 +651,60 @@ export function StartRPCServer(plugin: Plugin): void {
 }
 ```
 
-Each handler calls the detached, read-only `queryState`:
+Each handler calls a detached, read-only query:
 
-- Without `?address`, it does a **range read** over the record prefix (`FaucetPrefix()` / `RewardPrefix()`) and returns every record.
-- With `?address=<hex>`, it does a **single-key read** (`KeyForFaucet(addr)` / `KeyForReward(addr)`) and returns just that recipient's record.
+- Without `?address`, it does a **range read** via `queryState` over the record prefix (`FaucetPrefix()` / `RewardPrefix()`) and returns every record.
+- With `?address=<hex>`, it does a **single-key read with a proof** via `queryStateWithProof` (`KeyForFaucet(addr)` / `KeyForReward(addr)`) and returns just that recipient's record together with the SMT proof.
 
 > **Important — the range prefix must be length-prefixed.** Stored keys are length-prefixed (`KeyForFaucet(addr)` = `JoinLenPrefix(faucetPrefix, addr)`), so the prefix you pass to a **range read** must be length-prefixed too — that's exactly what `FaucetPrefix()` returns (`JoinLenPrefix(faucetPrefix)`, i.e. `[0x01, 0x64]`), **not** the raw buffer `[0x64]`. Passing the raw prefix byte misaligns Canopy's length-prefixed iterator and crashes the node with `panic: corrupt or incomplete key`. (Single-key reads via `KeyForFaucet(addr)` are already length-prefixed, so they're unaffected.)
+
+### Return a verifiable proof (recommended)
+
+The by-address single-record endpoint returns a **verifiable** response rather than a bare value. It calls `queryStateWithProof(height, KeyForFaucet(addr))` and shapes the result into JSON:
+
+```typescript
+// GET /v1/query/faucets?address=<hex>[&height=<uint64>]
+const [sp, err] = await plugin.queryStateWithProof(height, KeyForFaucet(addr));
+if (err) return void writeJSONError(res, 500, err.msg);
+// decode the raw record into the Faucet protobuf for the convenience `faucet` view
+const faucet = sp.exists && sp.value.length > 0 ? types.Faucet.decode(sp.value) : null;
+writeJSON(res, 200, {
+    height: sp.height,
+    stateRoot: bytesToHex(sp.stateRoot),
+    key: bytesToHex(KeyForFaucet(addr)),
+    exists: sp.exists,
+    value: bytesToHex(sp.value),
+    proof: sp.proof.map((n) => ({
+        key: bytesToHex(n.key ?? new Uint8Array(0)),
+        value: bytesToHex(n.value ?? new Uint8Array(0)),
+        bitmask: n.bitmask ?? 0
+    })),
+    faucet // convenience, decoded view only — NOT authenticated by the proof
+});
+```
+
+The response shape is:
+
+```json
+{
+  "height": 42,
+  "stateRoot": "<hex>",
+  "key": "<hex>",
+  "exists": true,
+  "value": "<hex>",
+  "proof": [{ "key": "<hex>", "value": "<hex>", "bitmask": 0 }],
+  "faucet": { "recipientAddress": "<hex>", "totalAmount": 1000000000, "count": 1 }
+}
+```
+
+**Why return a proof?** It makes the endpoint *trustless*. A plain JSON value forces the client to trust that this particular node reported state honestly. With a proof, the client instead:
+
+1. **Independently authenticates the `stateRoot`** at `height` — it gets the state root from the block's quorum certificate (the root a supermajority of validators signed), *not* from this endpoint, so the root itself cannot be forged by a single node.
+2. **Verifies the `proof` against that authenticated root.** The Sparse-Merkle-Tree proof cryptographically ties `key`/`value` (or proves the key's absence when `exists` is `false`) to the state root. If the proof hashes up to the trusted root, the value is genuine; if a node lies about `value` (or `exists`), the proof simply fails to verify.
+
+In other words, a malicious or buggy node can only ever make verification **fail** — it can never fabricate a value that verifies against the real state root. The `faucet` field is a convenience, already-decoded view of `value` for callers that don't verify; it is **not** authenticated by the proof, so verifying clients should decode `value` themselves after checking the proof.
+
+The reward endpoint follows the exact same pattern: `queryStateWithProof(height, KeyForReward(addr))`, with a `reward` convenience field in place of `faucet`.
 
 ### Query the endpoints
 
@@ -628,13 +715,22 @@ After faucet/reward transactions have been included in blocks:
 curl 'http://localhost:50010/v1/query/faucets'
 # {"faucets":[{"recipientAddress":"...","totalAmount":1000000000,"count":1}],"count":1,"height":0}
 
-# a single recipient's faucet record
+# a single recipient's faucet record (returns a verifiable proof)
 curl 'http://localhost:50010/v1/query/faucets?address=<recipient-hex>'
+# {
+#   "height": 42,
+#   "stateRoot": "a1b2...",
+#   "key": "0164...",
+#   "exists": true,
+#   "value": "0a14...",
+#   "proof": [{"key":"...","value":"...","bitmask":0}],
+#   "faucet": {"recipientAddress":"...","totalAmount":1000000000,"count":1}
+# }
 
 # all reward records (optionally at a historical height)
 curl 'http://localhost:50010/v1/query/rewards?height=42'
 
-# a single recipient's reward record
+# a single recipient's reward record (returns a verifiable proof, with a `reward` convenience field)
 curl 'http://localhost:50010/v1/query/rewards?address=<recipient-hex>'
 ```
 

@@ -1,5 +1,6 @@
 package com.canopy.plugin
 
+import com.google.protobuf.ByteString
 import mu.KotlinLogging
 import types.Plugin.*
 import org.newsclub.net.unix.AFUNIXSocket
@@ -26,6 +27,23 @@ private const val TIMEOUT_SECONDS = 10L
  * `tail -f /tmp/plugin/kotlin-plugin.log`, that the running binary includes the expected features.
  */
 const val PLUGIN_BUILD = "kotlin-plugin v1 (base SDK + detached custom RPC query path)"
+
+/**
+ * StateProof bundles the result of a detached, read-only single-key query made with prove=true: the
+ * committed [value], whether the key [exists], the sparse-merkle-tree [proof], and the [stateRoot] /
+ * [height] the proof commits to.
+ *
+ * A client authenticates the state root independently (via the quorum certificate) and then verifies
+ * the proof against it, so a lying or buggy node can at worst make verification fail — it can never
+ * forge an answer. When the key is absent, [exists] is false and [proof] is a non-membership proof.
+ */
+data class StateProof(
+    val value: ByteArray,
+    val exists: Boolean,
+    val proof: List<ProofNode>,
+    val stateRoot: ByteArray,
+    val height: Long
+)
 
 /**
  * PluginClient handles communication with the Canopy FSM via Unix domain socket
@@ -188,6 +206,73 @@ class PluginClient(
             response.hasError() -> PluginStateReadResponse.newBuilder()
                 .setError(response.error)
                 .build()
+            else -> throw Exception("Unexpected query response")
+        }
+    }
+
+    /**
+     * Execute a detached, read-only single-key query at the given height (0 = latest committed) that
+     * ALSO returns a sparse-merkle-tree proof for [key] by setting `prove = true` on the read.
+     *
+     * Like [queryState], it is NOT tied to an in-flight tx/block lifecycle and allocates its own
+     * fresh RANDOM request id, making it safe to call from custom RPC handlers. It returns a
+     * [StateProof] with the committed value, existence flag, proof, and the committed state root /
+     * height the proof commits to, so a client can verify the answer trustlessly.
+     */
+    fun queryStateWithProof(height: Long, key: ByteArray): StateProof {
+        // generate a fresh random request id (not tied to any in-flight FSM request)
+        val requestId = Random.nextLong()
+        val msg = PluginToFSM.newBuilder()
+            .setId(requestId)
+            .setQuery(
+                PluginQueryRequest.newBuilder()
+                    .setHeight(height)
+                    .setRead(
+                        PluginStateReadRequest.newBuilder()
+                            .addKeys(
+                                PluginKeyRead.newBuilder()
+                                    .setQueryId(Random.nextLong())
+                                    .setKey(ByteString.copyFrom(key))
+                                    .setProve(true)
+                                    .build()
+                            )
+                            .build()
+                    )
+                    .build()
+            )
+            .build()
+
+        // detached send: no Contract context is tracked for this request id
+        val response = sendSync(null, msg)
+
+        return when {
+            response.hasQuery() -> {
+                val query = response.query
+                // surface any FSM-side error attached to the query response
+                if (query.hasError() && query.error.code != 0L) {
+                    throw Exception("query error ${query.error.code}: ${query.error.msg}")
+                }
+                var value = ByteArray(0)
+                var exists = false
+                var proof: List<ProofNode> = emptyList()
+                // the detached read carries a single key, so the first result (if any) is ours
+                if (query.hasRead() && query.read.resultsCount > 0) {
+                    val result = query.read.getResults(0)
+                    exists = result.exists
+                    proof = result.proofList
+                    if (result.entriesCount > 0) {
+                        value = result.getEntries(0).value.toByteArray()
+                    }
+                }
+                StateProof(
+                    value = value,
+                    exists = exists,
+                    proof = proof,
+                    stateRoot = query.stateRoot.toByteArray(),
+                    height = query.height
+                )
+            }
+            response.hasError() -> throw Exception("query error ${response.error.code}: ${response.error.msg}")
             else -> throw Exception("Unexpected query response")
         }
     }

@@ -493,11 +493,63 @@ fun start() {
 Then add the `handleQueryFaucets` / `handleQueryRewards` handlers (and the JSON/hex helpers) to `Rpc.kt`. Each handler calls the detached, read-only `queryState`:
 
 - Without `?address`, it does a **range read** over the record prefix (`faucetPrefix()` / `rewardPrefix()`) and returns every record.
-- With `?address=<hex>`, it does a **single-key read** (`keyForFaucet(addr)` / `keyForReward(addr)`) and returns just that recipient's record.
+- With `?address=<hex>`, it does a **single-key read** (`keyForFaucet(addr)` / `keyForReward(addr)`) and returns just that recipient's record — together with a verifiable merkle proof (see below).
 
 > **Important — the range prefix must be length-prefixed.** Stored keys are length-prefixed (`keyForFaucet(addr)` = `joinLenPrefix(FAUCET_PREFIX, addr)`), so the prefix you pass to a **range read** must be length-prefixed too — that's exactly what `faucetPrefix()` returns (`joinLenPrefix(FAUCET_PREFIX)`, i.e. `byteArrayOf(0x01, 0x64)`), **not** the raw `byteArrayOf(0x64)`. Passing the raw prefix byte misaligns Canopy's length-prefixed iterator and crashes the node with `panic: corrupt or incomplete key`. (Single-key reads via `keyForFaucet(addr)` are already length-prefixed, so they're unaffected.)
 
 The listen address comes from the `rpcAddress` config field (default `0.0.0.0:50010`). The RPC server is optional and non-fatal: set `rpcAddress` to empty to disable it, and a bind failure (e.g. port already in use) is logged without crashing the plugin.
+
+### Return a verifiable proof (recommended)
+
+A plain `queryState` answer is only as trustworthy as the node that served it. The same socket can return a sparse-merkle-tree **proof** alongside the value, plus the `stateRoot` and `height` it was read at. A client authenticates the state root independently (via the quorum certificate) and then verifies the proof against it — so a lying or buggy node can at worst make verification *fail*; it can never forge an answer.
+
+Use the `PluginClient.queryStateWithProof(height, key)` helper for the single-key endpoint. It sets `prove = true` on the read and returns a `StateProof(value, exists, proof, stateRoot, height)`: the committed value, whether the key exists, the sparse-merkle-tree proof, and the committed `stateRoot`/`height` the proof commits to. Have the by-address handler call it and return JSON shaped `{height, stateRoot(hex), key(hex), exists, value(hex), proof:[{key,value,bitmask}], faucet}`:
+
+```kotlin
+// GET /v1/query/faucets?address=<hex>[&height=<uint64>]
+private fun handleQueryFaucets(exchange: HttpExchange) {
+    val address = queryParam(exchange, "address")
+    if (address.isNullOrEmpty()) {
+        handleFaucetList(exchange) // no address -> range read (returns {"faucets":[...]})
+        return
+    }
+    val addr = address.hexToBytes()
+    val height = queryParam(exchange, "height")?.toLongOrNull() ?: 0L // 0 = latest committed
+    val key = keyForFaucet(addr)
+
+    // ask for the value AND a merkle proof over the socket (prove = true)
+    val sp = plugin.queryStateWithProof(height, key)
+
+    val json = buildJsonObject {
+        put("height", JsonPrimitive(sp.height))
+        put("stateRoot", JsonPrimitive(sp.stateRoot.toHexString()))
+        put("key", JsonPrimitive(key.toHexString()))
+        put("exists", JsonPrimitive(sp.exists))
+        put("value", JsonPrimitive(sp.value.toHexString())) // raw committed bytes the proof commits to
+        put("proof", buildJsonArray {
+            for (node in sp.proof) {
+                add(buildJsonObject {
+                    put("key", JsonPrimitive(node.key.toByteArray().toHexString()))
+                    put("value", JsonPrimitive(node.value.toByteArray().toHexString()))
+                    put("bitmask", JsonPrimitive(node.bitmask))
+                })
+            }
+        })
+        // convenience view only; a trustless client should verify `value` against the proof instead
+        if (sp.exists) {
+            val faucet = Faucet.parseFrom(sp.value)
+            put("faucet", buildJsonObject {
+                put("recipientAddress", JsonPrimitive(faucet.recipientAddress.toByteArray().toHexString()))
+                put("totalAmount", JsonPrimitive(faucet.totalAmount))
+                put("count", JsonPrimitive(faucet.count))
+            })
+        }
+    }
+    writeJson(exchange, json.toString())
+}
+```
+
+> The `faucet` field is a convenience view only. A trustless client should **ignore it**, recompute the key from the address, verify `proof` against the authenticated `stateRoot`, and decode `value` itself. When the key is absent, `exists` is `false` and `proof` is a **non-membership** proof. The reward endpoint follows the same pattern via `keyForReward(addr)`.
 
 ### Query the endpoints
 
@@ -508,8 +560,17 @@ After faucet/reward transactions have been included in blocks:
 curl 'http://localhost:50010/v1/query/faucets'
 # {"faucets":[{"recipientAddress":"...","totalAmount":1000000000,"count":1}],"count":1,"height":0}
 
-# a single recipient's faucet record
+# a single recipient's faucet record, now with a verifiable merkle proof
 curl 'http://localhost:50010/v1/query/faucets?address=<recipient-hex>'
+# {
+#   "height": 123,
+#   "stateRoot": "a1b2c3...",
+#   "key": "0164...",
+#   "exists": true,
+#   "value": "0a14...",                       # raw committed bytes the proof commits to
+#   "proof": [{"key":"...","value":"...","bitmask":0}, ...],
+#   "faucet": {"recipientAddress":"...","totalAmount":1000000000,"count":1}
+# }
 
 # all reward records (optionally at a historical height)
 curl 'http://localhost:50010/v1/query/rewards?height=42'

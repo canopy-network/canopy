@@ -540,9 +540,62 @@ result = future.result(timeout=15)
 Each handler then decodes the raw bytes into the plugin's own `Faucet`/`Reward` types:
 
 - Without `?address`, it does a **range read** over the record prefix (`faucet_prefix()` / `reward_prefix()`) and returns every record.
-- With `?address=<hex>`, it does a **single-key read** (`key_for_faucet(addr)` / `key_for_reward(addr)`) and returns just that recipient's record.
+- With `?address=<hex>`, it does a **single-key read with a proof** via the new `query_state_with_proof(height, key)` helper (`key_for_faucet(addr)` / `key_for_reward(addr)`) and returns just that recipient's record together with the data needed to verify it trustlessly (see "Return a verifiable proof" below).
 
 > **Important — the range prefix must be length-prefixed.** Stored keys are length-prefixed (`key_for_faucet(addr)` = `join_len_prefix(FAUCET_PREFIX, addr)`), so the prefix you pass to a **range read** must be length-prefixed too — that's exactly what `faucet_prefix()` returns (`join_len_prefix(FAUCET_PREFIX)`, i.e. `b"\x01\x64"`), **not** the raw byte `b"\x64"`. Passing the raw prefix byte misaligns Canopy's length-prefixed iterator and crashes the node with `panic: corrupt or incomplete key`. (Single-key reads via `key_for_faucet(addr)` are already length-prefixed, so they're unaffected.)
+
+### Return a verifiable proof (recommended)
+
+A plain read answers "what does this node *say* the value is?" — the client has to trust the node. The single-recipient endpoint does better: it returns a **sparse-merkle-tree (SMT) proof** so the client can verify the value **trustlessly**, without trusting the node that served it.
+
+The framework adds `Plugin.query_state_with_proof(height, key)` (`contract/plugin.py`), the proof-carrying sibling of `query_state`. It sends a single-key read with `prove=True` and returns a small object with:
+
+- `value` (bytes) — the record's raw value (empty when the key doesn't exist)
+- `exists` (bool) — whether the key currently holds a non-empty value (membership vs. non-membership proof)
+- `proof` (list of `ProofNode`, each `{key, value, bitmask}`) — the leaf being proven plus the sibling nodes along the path to the root
+- `state_root` (bytes) — the state commitment root the proof commits to, at the resolved height
+- `height` (int) — the concrete committed height the query was resolved at (so `height=0` "latest" still tells the client which root to trust)
+
+The by-address faucet handler calls this helper and shapes a JSON object:
+
+```python
+def _handle_query_faucets(self, query):
+    addr_hex = (query.get("address") or [""])[0]
+    if not addr_hex:
+        # no address → fall back to the existing range-read list endpoint
+        return self._handle_query_faucets_list(query)
+    height = int((query.get("height") or ["0"])[0])  # 0 = latest
+    key = key_for_faucet(hex_to_bytes(addr_hex))
+
+    future = asyncio.run_coroutine_threadsafe(
+        self.plugin.query_state_with_proof(height, key), self.plugin._loop
+    )
+    sp = future.result(timeout=15)  # StateProof
+
+    # `faucet` is a convenience, already-decoded view of `value`; a trustless client should still
+    # verify `value` + `proof` against `stateRoot` itself rather than trust this decoded field.
+    faucet = unmarshal(Faucet, sp.value) if sp.exists else Faucet()
+    self._write_json({
+        "height": sp.height,
+        "stateRoot": sp.state_root.hex(),
+        "key": key.hex(),
+        "exists": sp.exists,
+        "value": sp.value.hex(),
+        "proof": [
+            {"key": n.key.hex(), "value": n.value.hex(), "bitmask": n.bitmask}
+            for n in sp.proof
+        ],
+        "faucet": {
+            "recipientAddress": faucet.recipient_address.hex(),
+            "totalAmount": faucet.total_amount,
+            "count": faucet.count,
+        },
+    })
+```
+
+**How a client verifies trustlessly:** it authenticates `stateRoot` independently — it does **not** take the node's word for it — by checking the quorum certificate for that `height` (the root is signed by the validator set). It then recomputes the root from `value` + `proof` and checks it equals the authenticated `stateRoot`. If they match, the value is provably the committed state; if a node lies about `value` or `proof`, the recomputed root simply won't match and verification **fails** — a dishonest node can only make the check fail, it can never forge a value that verifies. (When `exists` is `false`, the proof is a *non-membership* proof: it proves the key is genuinely absent.)
+
+The `faucet` field is a **convenience view only** — the already-decoded record so callers that trust the node can skip the proof math. A trustless client should ignore it and verify `value` + `proof` against `stateRoot` itself. The **reward** endpoint follows the exact same pattern through its own key builder (`key_for_reward(addr)`), returning a `reward` convenience field alongside the identical `height`/`stateRoot`/`key`/`exists`/`value`/`proof` fields.
 
 The server is already started from `main.py` (no change needed):
 
@@ -562,13 +615,29 @@ After faucet/reward transactions have been included in blocks:
 curl 'http://localhost:50010/v1/query/faucets'
 # {"faucets":[{"recipientAddress":"...","totalAmount":1000000000,"count":1}],"count":1,"height":0}
 
-# a single recipient's faucet record
+# a single recipient's faucet record — now returns a verifiable proof
 curl 'http://localhost:50010/v1/query/faucets?address=<recipient-hex>'
+# {
+#   "height": 42,
+#   "stateRoot": "9f2c…",                       // authenticate this via the quorum certificate
+#   "key": "0164…",                             // the length-prefixed state key that was proven
+#   "exists": true,
+#   "value": "0a14…",                           // raw record bytes the proof commits to
+#   "proof": [                                  // leaf + sibling nodes up to the root
+#     {"key": "…", "value": "…", "bitmask": 0},
+#     {"key": "…", "value": "…", "bitmask": 1}
+#   ],
+#   "faucet": {                                 // convenience view only — verify value+proof instead
+#     "recipientAddress": "<recipient-hex>",
+#     "totalAmount": 1000000000,
+#     "count": 1
+#   }
+# }
 
 # all reward records (optionally at a historical height)
 curl 'http://localhost:50010/v1/query/rewards?height=42'
 
-# a single recipient's reward record
+# a single recipient's reward record — same proof shape, with a `reward` convenience field
 curl 'http://localhost:50010/v1/query/rewards?address=<recipient-hex>'
 ```
 

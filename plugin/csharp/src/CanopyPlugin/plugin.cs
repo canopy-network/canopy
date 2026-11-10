@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Net.Sockets;
 using System.Threading;
@@ -163,6 +164,79 @@ namespace CanopyPlugin
             return response.Query.Read ?? new PluginStateReadResponse();
         }
 
+        // QueryStateWithProof executes a detached, read-only single-key state query that ALSO requests a
+        // sparse-merkle-tree proof for the key (Prove = true). Like QueryStateAsync it is NOT tied to any
+        // in-flight tx/block lifecycle and allocates its own fresh random request id, so it is safe to call
+        // from custom RPC handlers. It returns the value, a membership/non-membership flag, the proof nodes,
+        // and the state root + concrete height the query was resolved at (height 0 = latest committed), so a
+        // client can authenticate the root independently and verify the proof trustlessly.
+        public async Task<StateProof> QueryStateWithProofAsync(ulong height, byte[] key)
+        {
+            // generate a fresh random request id (not tied to any in-flight FSM request)
+            var requestId = (ulong)Random.NextInt64();
+
+            // send the detached single-key read with Prove = true and wait for a response
+            var response = await SendToPluginSyncAsync(requestId, new PluginToFSM
+            {
+                Id = requestId,
+                Query = new PluginQueryRequest
+                {
+                    Height = height,
+                    Read = new PluginStateReadRequest
+                    {
+                        Keys =
+                        {
+                            new PluginKeyRead
+                            {
+                                QueryId = (ulong)Random.NextInt64(),
+                                Key = ByteString.CopyFrom(key),
+                                Prove = true
+                            }
+                        }
+                    }
+                }
+            });
+
+            // unexpected or missing response
+            if (response?.Query == null)
+            {
+                throw new InvalidOperationException("unexpected or missing query response");
+            }
+
+            // surface any FSM-side error attached to the query response
+            if (response.Query.Error != null)
+            {
+                throw new InvalidOperationException($"query error: {response.Query.Error}");
+            }
+
+            // seed the result with the state root and the concrete (resolved) height the query ran at
+            var value = Array.Empty<byte>();
+            var exists = false;
+            IReadOnlyList<ProofNode> proof = Array.Empty<ProofNode>();
+
+            // unwrap the single read result (if any) for the proven key
+            var read = response.Query.Read;
+            if (read != null && read.Results.Count > 0)
+            {
+                var res = read.Results[0];
+                exists = res.Exists;
+                proof = new List<ProofNode>(res.Proof);
+                if (res.Entries.Count > 0)
+                {
+                    value = res.Entries[0].Value?.ToByteArray() ?? Array.Empty<byte>();
+                }
+            }
+
+            return new StateProof
+            {
+                Value = value,
+                Exists = exists,
+                Proof = proof,
+                StateRoot = response.Query.StateRoot?.ToByteArray() ?? Array.Empty<byte>(),
+                Height = response.Query.Height
+            };
+        }
+
         // ListenForInbound routes inbound requests from the plugin
         private async Task ListenForInboundAsync()
         {
@@ -300,5 +374,19 @@ namespace CanopyPlugin
             _stream?.Dispose();
             _socket?.Dispose();
         }
+    }
+
+    // StateProof is the result of a detached, read-only single-key query made with Prove = true. It carries
+    // the value (empty for a non-membership proof), a membership flag, the sparse-merkle-tree proof nodes,
+    // and the state root + concrete height the query was resolved at. A client authenticates the state root
+    // independently (via the quorum certificate) and then verifies the proof against it; a lying node can
+    // only make verification fail, never forge a value.
+    public sealed class StateProof
+    {
+        public byte[] Value { get; init; } = Array.Empty<byte>();
+        public bool Exists { get; init; }
+        public IReadOnlyList<ProofNode> Proof { get; init; } = Array.Empty<ProofNode>();
+        public byte[] StateRoot { get; init; } = Array.Empty<byte>();
+        public ulong Height { get; init; }
     }
 }

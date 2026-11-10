@@ -464,12 +464,73 @@ func (p *Plugin) StartRPCServer() {
 }
 ```
 
-Each handler calls the detached, read-only `QueryState`:
+Each handler calls the detached, read-only query path:
 
 - Without `?address`, it does a **range read** over the record prefix (`FaucetPrefix()` / `RewardPrefix()`) and returns every record.
-- With `?address=<hex>`, it does a **single-key read** (`KeyForFaucet(addr)` / `KeyForReward(addr)`) and returns just that recipient's record.
+- With `?address=<hex>`, it does a **single-key read** that also asks the FSM for a **merkle proof**, so the caller can verify the answer without trusting the node (see below).
 
 The listen address comes from the `rpcAddress` config field (default `0.0.0.0:50010`).
+
+### Return a verifiable proof (recommended)
+
+A plain `QueryState` answer is only as trustworthy as the node that served it. The same socket can return a sparse-merkle-tree **proof** alongside the value, plus the `stateRoot` and `height` it was read at. A client authenticates the root independently (via the quorum certificate) and then verifies the proof against it — so a lying or buggy node can at worst make verification *fail*; it can never forge an answer.
+
+Use the `QueryStateWithProof(height, key)` helper (in `contract/plugin.go`) for the single-key endpoint. It sets `prove=true` on the read and returns the value, whether the key exists, the proof, and the committed `stateRoot`/`height`:
+
+```go
+// faucetProofResponse is the JSON shape returned for a single, verifiable faucet record.
+type faucetProofResponse struct {
+    Height    uint64       `json:"height"`
+    StateRoot string       `json:"stateRoot"`
+    Key       string       `json:"key"`
+    Exists    bool         `json:"exists"`
+    Value     string       `json:"value"`            // raw committed bytes (hex) the proof commits to
+    Proof     []*ProofNode `json:"proof"`            // membership (exists) or non-membership proof
+    Faucet    *Faucet      `json:"faucet,omitempty"` // convenience view only; a client should verify Value
+}
+
+// GET /v1/query/faucets?address=<hex>[&height=<uint64>]
+func (p *Plugin) handleQueryFaucets(w http.ResponseWriter, r *http.Request) {
+    addrHex := r.URL.Query().Get("address")
+    if addrHex == "" {
+        p.handleFaucetList(w, r) // no address -> range read (returns {"faucets":[...]})
+        return
+    }
+    addr, err := hex.DecodeString(addrHex)
+    if err != nil {
+        http.Error(w, "bad address", http.StatusBadRequest)
+        return
+    }
+    height, _ := strconv.ParseUint(r.URL.Query().Get("height"), 10, 64) // 0 = latest committed
+    key := KeyForFaucet(addr)
+
+    // ask for the value AND a merkle proof over the socket (prove=true)
+    sp, pErr := p.QueryStateWithProof(height, key)
+    if pErr != nil {
+        http.Error(w, pErr.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    resp := faucetProofResponse{
+        Height:    sp.Height,
+        StateRoot: hex.EncodeToString(sp.StateRoot),
+        Key:       hex.EncodeToString(key),
+        Exists:    sp.Exists,
+        Value:     hex.EncodeToString(sp.Value),
+        Proof:     sp.Proof,
+    }
+    if sp.Exists {
+        faucet := new(Faucet)
+        if err := Unmarshal(sp.Value, faucet); err == nil {
+            resp.Faucet = faucet
+        }
+    }
+    w.Header().Set("Content-Type", "application/json")
+    _ = json.NewEncoder(w).Encode(resp)
+}
+```
+
+> The `faucet` field is a convenience view only. A trustless client should **ignore it**, recompute the key from the address, verify `proof` against the authenticated `stateRoot`, and decode `value` itself. When the key is absent, `exists` is `false` and `proof` is a **non-membership** proof. The reward endpoint follows the same pattern via `KeyForReward(addr)`.
 
 ### Query the endpoints
 
@@ -480,8 +541,17 @@ After faucet/reward transactions have been included in blocks:
 curl 'http://localhost:50010/v1/query/faucets'
 # {"faucets":[{"recipientAddress":"...","totalAmount":1000000000,"count":1}],"count":1,"height":0}
 
-# a single recipient's faucet record
+# a single recipient's faucet record, now with a verifiable merkle proof
 curl 'http://localhost:50010/v1/query/faucets?address=<recipient-hex>'
+# {
+#   "height": 123,
+#   "stateRoot": "a1b2c3...",
+#   "key": "64...",
+#   "exists": true,
+#   "value": "0a14...",                       # raw committed bytes the proof commits to
+#   "proof": [{"key":"...","value":"...","bitmask":0}, ...],
+#   "faucet": {"recipientAddress":"...","totalAmount":1000000000,"count":1}
+# }
 
 # all reward records (optionally at a historical height)
 curl 'http://localhost:50010/v1/query/rewards?height=42'

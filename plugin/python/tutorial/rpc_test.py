@@ -25,6 +25,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'proto'))
 from google.protobuf import any_pb2
 import tx_pb2
 
+# Self-contained, dependency-free client-side SMT proof verifier (stdlib only). Lives alongside this
+# test file so a trustless client can verify the merkle proofs returned by the plugin RPC endpoints.
+from verify import ProofNode, verify_key_proof
+
 # BLS12-381 signing using blspy
 from blspy import PrivateKey, BasicSchemeMPL
 
@@ -356,10 +360,20 @@ def get_raw_json(url: str) -> str:
         raise Exception(f"HTTP {e.code}: {error_body}")
 
 
+def query_faucet_response(plugin_url: str, address: str) -> dict:
+    """Fetch the full by-address faucet response (proof envelope + decoded record) from the plugin.
+
+    Unlike query_faucet_record(), which returns just the convenience `faucet` view, this returns the
+    whole JSON object so callers can inspect the verifiable-proof fields (stateRoot, height, proof,
+    exists, value, key).
+    """
+    resp_body = get_raw_json(f"{plugin_url}/v1/query/faucets?address={address}")
+    return json.loads(resp_body)
+
+
 def query_faucet_record(plugin_url: str, address: str) -> dict:
     """Fetch a single recipient's faucet record from the plugin RPC server."""
-    resp_body = get_raw_json(f"{plugin_url}/v1/query/faucets?address={address}")
-    return json.loads(resp_body).get('faucet', {})
+    return query_faucet_response(plugin_url, address).get('faucet', {})
 
 
 def query_faucet_list(plugin_url: str) -> list:
@@ -466,6 +480,33 @@ def validate_reward_records(records: list) -> None:
             (f"reward list returned a malformed record (recipient={rec.get('recipientAddress')}, "
              f"totalAmount={rec.get('totalAmount')}, count={rec.get('count')}); "
              f"the endpoint may be reading colliding core state")
+
+
+def to_verify_proof(nodes: list) -> list:
+    """Convert the JSON proof envelope (hex strings) into the verifier's ProofNode list."""
+    out: list = []
+    for n in nodes:
+        out.append(ProofNode(
+            key=bytes.fromhex(n.get('key', '')),
+            value=bytes.fromhex(n.get('value', '')),
+            bitmask=int(n.get('bitmask', 0)),
+        ))
+    return out
+
+
+def flip_first_byte(b: bytes) -> bytes:
+    """Return a copy of b with its first byte flipped (or a single byte if empty), so the result is
+    guaranteed to differ from the original. Used to tamper proof inputs."""
+    out = bytearray(b)
+    if len(out) == 0:
+        return b"\xff"
+    out[0] ^= 0xFF
+    return bytes(out)
+
+
+def clone_proof(proof: list) -> list:
+    """Return a deep copy of a proof list so a test can tamper one node in isolation."""
+    return [ProofNode(key=bytes(n.key), value=bytes(n.value), bitmask=n.bitmask) for n in proof]
 
 
 def _skip(message: str) -> None:
@@ -575,6 +616,23 @@ def test_plugin_custom_rpc_endpoints() -> None:
         f"faucet totalAmount after second faucet = {faucet.get('totalAmount')}, want {want_total}"
     print(f"Faucet record aggregation verified (totalAmount={want_total}, count=2)")
 
+    # the by-address endpoint should also return a verifiable proof envelope: a non-empty state root,
+    # the concrete committed height it resolved at, a non-empty SMT proof, and exists=True for a key
+    # that holds a value. A trustless client authenticates stateRoot via the quorum certificate and
+    # verifies value+proof against it.
+    print("Verifying the by-address faucet endpoint returns a verifiable proof...")
+    faucet_resp = query_faucet_response(plugin_rpc_url, recipient_addr)
+    assert faucet_resp.get('stateRoot'), \
+        f"faucet response missing non-empty stateRoot: {faucet_resp.get('stateRoot')!r}"
+    assert int(faucet_resp.get('height', 0)) > 0, \
+        f"faucet response height = {faucet_resp.get('height')}, want > 0"
+    assert faucet_resp.get('exists') is True, \
+        f"faucet response exists = {faucet_resp.get('exists')}, want True"
+    assert faucet_resp.get('proof'), \
+        f"faucet response missing non-empty proof: {faucet_resp.get('proof')!r}"
+    print(f"Proof verified: height={faucet_resp.get('height')} "
+          f"stateRoot={str(faucet_resp.get('stateRoot'))[:16]}… proofNodes={len(faucet_resp.get('proof') or [])}")
+
     # the recipient should also appear in the list (range-read) endpoint
     print("Querying plugin endpoint GET /v1/query/faucets (list / range read)...")
     faucets = query_faucet_list(plugin_rpc_url)
@@ -662,6 +720,86 @@ def test_plugin_custom_rpc_endpoints() -> None:
     print(f"  curl '{plugin_rpc_url}/v1/query/rewards?address={recipient_addr}'")
     print(f"  curl '{plugin_rpc_url}/v1/query/faucets'")
     print(f"  curl '{plugin_rpc_url}/v1/query/rewards'")
+
+
+def test_faucet_proof_tamper_detected() -> None:
+    """Prove the merkle proof actually does its job.
+
+    It funds a fresh recipient so a real membership proof exists, fetches the honest proof from the
+    plugin RPC endpoint and confirms it VERIFIES against the returned state root, then tampers each
+    input (the value, a proof node, the state root, and the key) and asserts verification now FAILS. A
+    client that trusts the node blindly could be lied to; a client that verifies the proof cannot.
+
+    NOTE: like the other tutorial tests this is a live integration test. It verifies against the root
+    the node returned; a production client authenticates that root independently via the quorum
+    certificate before trusting it (see the verify module docstring).
+    """
+    print("=== Python Faucet Proof Tamper-Detection Test ===\n")
+
+    plugin_rpc_url = "http://localhost:50010"  # the plugin's own custom RPC server
+    tx_timeout = 120      # max wait for a tx to be committed + indexed
+    record_timeout = 60   # max wait for the plugin RPC record to reflect committed state
+
+    # skip when the plugin RPC server isn't reachable (consistent with the other tutorial tests)
+    print(f"Checking plugin RPC server reachability at {plugin_rpc_url} ...")
+    try:
+        get_raw_json(f"{plugin_rpc_url}/v1/query/faucets")
+    except Exception as e:
+        _skip(
+            f"plugin RPC server not reachable at {plugin_rpc_url} "
+            f"(is Canopy running with the python plugin and port 50010 exposed?): {e}"
+        )
+        return
+    print("Plugin RPC server is reachable")
+
+    # fund a fresh recipient so a membership proof exists for its faucet record
+    suffix = random_suffix()
+    recipient_addr = keystore_new_key(ADMIN_RPC_URL, f"test_proof_{suffix}", TEST_PASSWORD)
+    recipient_key = keystore_get_key(ADMIN_RPC_URL, recipient_addr, TEST_PASSWORD)
+    print(f"Created recipient account: {recipient_addr}")
+
+    height = get_height(QUERY_RPC_URL)
+    tx_hash = send_faucet_tx(QUERY_RPC_URL, recipient_key, recipient_addr, 1000000000, 10000, NETWORK_ID, CHAIN_ID, height)
+    print(f"Faucet transaction sent: {tx_hash}")
+    if not wait_for_tx_inclusion(QUERY_RPC_URL, recipient_addr, tx_hash, tx_timeout):
+        raise Exception("faucet tx not included within timeout")
+    print("Faucet transaction confirmed!")
+    poll_faucet_record(plugin_rpc_url, recipient_addr, record_timeout)
+
+    # fetch the honest proof envelope
+    env = query_faucet_response(plugin_rpc_url, recipient_addr)
+    assert env.get('exists') is True and env.get('proof'), \
+        f"expected a membership proof; got exists={env.get('exists')} proofNodes={len(env.get('proof') or [])}"
+    key = bytes.fromhex(env['key'])
+    value = bytes.fromhex(env['value'])
+    root = bytes.fromhex(env['stateRoot'])
+    proof = to_verify_proof(env['proof'])
+
+    # positive control: the honest proof MUST verify against the returned state root
+    assert verify_key_proof(key, value, True, root, proof), \
+        "honest faucet proof failed to verify against the state root"
+    print(f"Honest faucet proof verified ({len(proof)} node(s)) against the state root")
+
+    # negative cases: each tampered input MUST be rejected (verify returns False)
+    assert not verify_key_proof(key, flip_first_byte(value), True, root, proof), \
+        "verification ACCEPTED a tampered value (expected failure)"
+    print("Tampered value correctly rejected")
+
+    bad = clone_proof(proof)
+    bad[0].value = flip_first_byte(bad[0].value)
+    assert not verify_key_proof(key, value, True, root, bad), \
+        "verification ACCEPTED a tampered proof node (expected failure)"
+    print("Tampered proof node correctly rejected")
+
+    assert not verify_key_proof(key, value, True, flip_first_byte(root), proof), \
+        "verification ACCEPTED a tampered state root (expected failure)"
+    print("Tampered state root correctly rejected")
+
+    assert not verify_key_proof(flip_first_byte(key), value, True, root, proof), \
+        "verification ACCEPTED a proof for the wrong key (expected failure)"
+    print("Wrong key correctly rejected")
+
+    print("\n--- All tampered faucet proofs were correctly rejected by the verifier! ---")
 
 
 def test_plugin_transactions() -> None:
@@ -812,7 +950,7 @@ def test_plugin_transactions() -> None:
 
 
 if __name__ == "__main__":
-    # optional selector: "transactions", "custom"/"rpc", or "all" (default)
+    # optional selector: "transactions", "custom"/"rpc", "proof", or "all" (default)
     selected = sys.argv[1] if len(sys.argv) > 1 else "all"
     try:
         if selected in ("all", "transactions", "tx"):
@@ -820,6 +958,9 @@ if __name__ == "__main__":
             print()
         if selected in ("all", "custom", "rpc"):
             test_plugin_custom_rpc_endpoints()
+        if selected in ("all", "proof"):
+            print()
+            test_faucet_proof_tamper_detected()
         print("\nTest completed successfully!")
         sys.exit(0)
     except Exception as e:

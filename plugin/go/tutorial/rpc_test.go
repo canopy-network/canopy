@@ -14,6 +14,7 @@ import (
 
 	"github.com/canopy-network/go-plugin/tutorial/contract"
 	"github.com/canopy-network/go-plugin/tutorial/crypto"
+	"github.com/canopy-network/go-plugin/tutorial/verify"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -288,6 +289,27 @@ func TestPluginCustomRPCEndpoints(t *testing.T) {
 		t.Errorf("faucet recipientAddress = %s, want %s", faucet.RecipientAddress, recipientAddr)
 	}
 	t.Log("Faucet record verified after first faucet (count=1)")
+
+	// the single-record endpoint also returns a verifiable merkle proof fetched over the socket
+	// (prove=true): the proof, the committed value, the state root, and the height it was read at.
+	t.Log("Verifying the faucet endpoint returns a merkle proof + state root...")
+	env, err := queryFaucetWithProof(pluginRPCURL, recipientAddr)
+	if err != nil {
+		t.Fatalf("Failed to query faucet record with proof: %v", err)
+	}
+	if env.StateRoot == "" {
+		t.Error("faucet proof response missing stateRoot")
+	}
+	if env.Height == 0 {
+		t.Error("faucet proof response missing height")
+	}
+	if !env.Exists {
+		t.Error("faucet proof response exists=false for a funded recipient")
+	}
+	if len(env.Proof) == 0 {
+		t.Error("faucet proof response missing proof nodes")
+	}
+	t.Logf("Faucet endpoint returned a verifiable proof: %d node(s), height=%d, exists=%v", len(env.Proof), env.Height, env.Exists)
 
 	t.Logf("Sending second faucet to recipient (amount=%d, fee=%d)...", faucetAmount2, fee)
 	height, _ = getHeight(queryRPCURL)
@@ -808,6 +830,26 @@ type rewardRecord struct {
 	Count            uint64 `json:"count"`
 }
 
+// proofNodeJSON mirrors a single sparse-merkle-tree proof node in the plugin RPC response
+type proofNodeJSON struct {
+	Key     string `json:"key"`
+	Value   string `json:"value"`
+	Bitmask int32  `json:"bitmask"`
+}
+
+// faucetProofEnvelope mirrors the proof-carrying JSON shape of /v1/query/faucets?address=<hex>:
+// the decoded record plus the merkle proof, committed value, state root, and height needed to verify
+// the answer trustlessly against an independently authenticated root.
+type faucetProofEnvelope struct {
+	Height    uint64          `json:"height"`
+	StateRoot string          `json:"stateRoot"`
+	Key       string          `json:"key"`
+	Exists    bool            `json:"exists"`
+	Value     string          `json:"value"`
+	Proof     []proofNodeJSON `json:"proof"`
+	Faucet    faucetRecord    `json:"faucet"`
+}
+
 // queryFaucetRecord fetches a single recipient's faucet record from the plugin RPC server
 func queryFaucetRecord(pluginURL, address string) (*faucetRecord, error) {
 	respBody, err := getRawJSON(pluginURL + "/v1/query/faucets?address=" + address)
@@ -821,6 +863,19 @@ func queryFaucetRecord(pluginURL, address string) (*faucetRecord, error) {
 		return nil, fmt.Errorf("failed to parse response: %v, body: %s", err, string(respBody))
 	}
 	return &result.Faucet, nil
+}
+
+// queryFaucetWithProof fetches a recipient's faucet record together with its merkle proof envelope
+func queryFaucetWithProof(pluginURL, address string) (*faucetProofEnvelope, error) {
+	respBody, err := getRawJSON(pluginURL + "/v1/query/faucets?address=" + address)
+	if err != nil {
+		return nil, err
+	}
+	env := new(faucetProofEnvelope)
+	if err := json.Unmarshal(respBody, env); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %v, body: %s", err, string(respBody))
+	}
+	return env, nil
 }
 
 // queryFaucetList fetches all faucet records from the plugin RPC server (range read)
@@ -962,4 +1017,136 @@ func validateRewardRecords(records []rewardRecord) error {
 		}
 	}
 	return nil
+}
+
+// toVerifyProof converts the JSON proof envelope (hex strings) into the verifier's ProofNode slice.
+func toVerifyProof(nodes []proofNodeJSON) []verify.ProofNode {
+	out := make([]verify.ProofNode, len(nodes))
+	for i, n := range nodes {
+		k, _ := hex.DecodeString(n.Key)
+		v, _ := hex.DecodeString(n.Value)
+		out[i] = verify.ProofNode{Key: k, Value: v, Bitmask: n.Bitmask}
+	}
+	return out
+}
+
+// flipFirstByte returns a copy of b with its first byte flipped (or a single byte if empty), so the
+// result is guaranteed to differ from the original. Used to tamper proof inputs.
+func flipFirstByte(b []byte) []byte {
+	out := append([]byte(nil), b...)
+	if len(out) == 0 {
+		return []byte{0xff}
+	}
+	out[0] ^= 0xff
+	return out
+}
+
+// cloneProof returns a deep copy of a proof slice so a test can tamper one node in isolation.
+func cloneProof(in []verify.ProofNode) []verify.ProofNode {
+	out := make([]verify.ProofNode, len(in))
+	for i, n := range in {
+		out[i] = verify.ProofNode{Key: append([]byte(nil), n.Key...), Value: append([]byte(nil), n.Value...), Bitmask: n.Bitmask}
+	}
+	return out
+}
+
+// TestFaucetProofTamperDetected proves the merkle proof actually does its job. It funds a recipient so
+// a real membership proof exists, fetches the honest proof from the plugin RPC endpoint and confirms
+// it VERIFIES against the returned state root, then tampers each input (the value, a proof node, and
+// the root) and asserts verification now FAILS. A client that trusts the node blindly could be lied
+// to; a client that verifies the proof cannot.
+//
+// NOTE: like the other tutorial tests this is a live integration test. It verifies against the root
+// the node returned; a production client authenticates that root independently via the quorum
+// certificate before trusting it (see the verify package docs).
+func TestFaucetProofTamperDetected(t *testing.T) {
+	queryRPCURL := "http://localhost:50002"
+	adminRPCURL := "http://localhost:50003"
+	pluginRPCURL := "http://localhost:50010"
+	networkID, chainID := uint64(1), uint64(1)
+	testPassword := "testpassword123"
+	txTimeout := 120 * time.Second
+	recordTimeout := 60 * time.Second
+
+	// skip when the plugin RPC server isn't reachable (consistent with the other tutorial tests)
+	if _, err := getRawJSON(pluginRPCURL + "/v1/query/faucets"); err != nil {
+		t.Skipf("plugin RPC server not reachable at %s (is Canopy running with the go plugin and port 50010 exposed?): %v", pluginRPCURL, err)
+	}
+
+	// fund a fresh recipient so a membership proof exists for its faucet record
+	suffix := randomSuffix()
+	recipientAddr, err := keystoreNewKey(adminRPCURL, "test_proof_"+suffix, testPassword)
+	if err != nil {
+		t.Fatalf("Failed to create recipient: %v", err)
+	}
+	recipientKey, err := keystoreGetKey(adminRPCURL, recipientAddr, testPassword)
+	if err != nil {
+		t.Fatalf("Failed to get recipient key: %v", err)
+	}
+	height, _ := getHeight(queryRPCURL)
+	txHash, err := sendFaucetTx(queryRPCURL, recipientKey, recipientAddr, uint64(1000000000), uint64(10000), networkID, chainID, height)
+	if err != nil {
+		t.Fatalf("Failed to send faucet tx: %v", err)
+	}
+	if ok, err := waitForTxInclusion(queryRPCURL, recipientAddr, txHash, txTimeout); err != nil || !ok {
+		t.Fatalf("faucet tx not included: ok=%v err=%v", ok, err)
+	}
+	if _, err := pollFaucetRecord(pluginRPCURL, recipientAddr, recordTimeout); err != nil {
+		t.Fatalf("faucet record did not appear: %v", err)
+	}
+
+	// fetch the honest proof envelope
+	env, err := queryFaucetWithProof(pluginRPCURL, recipientAddr)
+	if err != nil {
+		t.Fatalf("Failed to query faucet record with proof: %v", err)
+	}
+	if !env.Exists || len(env.Proof) == 0 {
+		t.Fatalf("expected a membership proof; got exists=%v proofNodes=%d", env.Exists, len(env.Proof))
+	}
+	key, err := hex.DecodeString(env.Key)
+	if err != nil {
+		t.Fatalf("bad key hex: %v", err)
+	}
+	value, err := hex.DecodeString(env.Value)
+	if err != nil {
+		t.Fatalf("bad value hex: %v", err)
+	}
+	root, err := hex.DecodeString(env.StateRoot)
+	if err != nil {
+		t.Fatalf("bad stateRoot hex: %v", err)
+	}
+	proof := toVerifyProof(env.Proof)
+
+	// positive control: the honest proof MUST verify against the returned state root
+	ok, vErr := verify.VerifyKeyProof(key, value, true, root, proof)
+	if vErr != nil || !ok {
+		t.Fatalf("honest faucet proof failed to verify: ok=%v err=%v", ok, vErr)
+	}
+	t.Logf("honest faucet proof verified (%d node(s)) against the state root", len(proof))
+
+	// negative cases: each tampered input MUST be rejected (ok=false)
+	t.Run("tampered value", func(t *testing.T) {
+		if ok, _ := verify.VerifyKeyProof(key, flipFirstByte(value), true, root, proof); ok {
+			t.Fatal("verification ACCEPTED a tampered value (expected failure)")
+		}
+	})
+	t.Run("tampered proof node", func(t *testing.T) {
+		bad := cloneProof(proof)
+		bad[0].Value = flipFirstByte(bad[0].Value)
+		if ok, _ := verify.VerifyKeyProof(key, value, true, root, bad); ok {
+			t.Fatal("verification ACCEPTED a tampered proof node (expected failure)")
+		}
+	})
+	t.Run("tampered state root", func(t *testing.T) {
+		if ok, _ := verify.VerifyKeyProof(key, value, true, flipFirstByte(root), proof); ok {
+			t.Fatal("verification ACCEPTED a tampered state root (expected failure)")
+		}
+	})
+	t.Run("wrong key (claim membership for an unfunded address)", func(t *testing.T) {
+		wrongKey := flipFirstByte(key)
+		if ok, _ := verify.VerifyKeyProof(wrongKey, value, true, root, proof); ok {
+			t.Fatal("verification ACCEPTED a proof for the wrong key (expected failure)")
+		}
+	})
+	t.Log("all tampered faucet proofs were correctly rejected by the verifier")
 }

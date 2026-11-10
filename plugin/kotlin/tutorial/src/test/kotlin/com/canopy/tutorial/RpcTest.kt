@@ -7,10 +7,12 @@ import com.google.protobuf.Any
 import com.google.protobuf.ByteString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.long
 import org.junit.jupiter.api.Assumptions
 import org.junit.jupiter.api.Test
@@ -233,6 +235,35 @@ class RpcTest {
     )
 
     /**
+     * Holds the JSON shape returned by the plugin's by-address /v1/query/faucets endpoint, which
+     * (in addition to the convenience `faucet` view) returns a verifiable merkle proof and the
+     * committed state root / height the proof commits to.
+     */
+    data class FaucetProof(
+        val height: Long,
+        val stateRoot: String,
+        val key: String,
+        val exists: Boolean,
+        val value: String,
+        val proofSize: Int,
+        val faucet: FaucetRecord
+    )
+
+    /**
+     * Holds the full proof-carrying JSON shape of /v1/query/faucets?address=<hex>: the committed
+     * value, state root, and height plus the decoded sparse-merkle-tree proof nodes needed to verify
+     * the answer trustlessly against an independently authenticated root.
+     */
+    data class FaucetProofEnvelope(
+        val height: Long,
+        val stateRoot: String,
+        val key: String,
+        val exists: Boolean,
+        val value: String,
+        val proof: List<ProofNode>
+    )
+
+    /**
      * Holds the JSON shape returned by the plugin's /v1/query/rewards endpoint.
      */
     data class RewardRecord(
@@ -321,6 +352,18 @@ class RpcTest {
         assertTrue(faucet.totalAmount == faucetAmount1, "faucet totalAmount after first faucet = ${faucet.totalAmount}, want $faucetAmount1")
         assertTrue(faucet.recipientAddress.equals(recipientAddr, ignoreCase = true), "faucet recipientAddress = ${faucet.recipientAddress}, want $recipientAddr")
         println("  Faucet record verified after first faucet (count=1)")
+
+        // The by-address endpoint also returns a verifiable merkle proof plus the committed
+        // stateRoot/height it was read at. A trustless client authenticates the stateRoot
+        // independently (via the quorum certificate) and verifies the proof against it.
+        println("  Verifying the by-address faucet record carries a verifiable merkle proof...")
+        val faucetProof = queryFaucetProof(recipientAddr)
+        println("  Proof response: exists=${faucetProof.exists} height=${faucetProof.height} stateRootLen=${faucetProof.stateRoot.length} proofNodes=${faucetProof.proofSize}")
+        assertTrue(faucetProof.stateRoot.isNotEmpty(), "faucet proof response missing a non-empty stateRoot")
+        assertTrue(faucetProof.height > 0L, "faucet proof height = ${faucetProof.height}, want > 0")
+        assertTrue(faucetProof.proofSize > 0, "faucet proof is empty (want a non-empty merkle proof)")
+        assertTrue(faucetProof.exists, "faucet proof exists = false, want true for an existing record")
+        println("  Verifiable proof confirmed (exists=true, non-empty stateRoot/proof, height>0)")
 
         println("\n  Sending second faucet to recipient (amount=$faucetAmount2, fee=$fee)...")
         height = getHeight(QUERY_RPC_URL)
@@ -427,6 +470,104 @@ class RpcTest {
         println("  curl '$PLUGIN_RPC_URL/v1/query/rewards?address=$recipientAddr'")
         println("  curl '$PLUGIN_RPC_URL/v1/query/faucets'")
         println("  curl '$PLUGIN_RPC_URL/v1/query/rewards'")
+    }
+
+    /**
+     * Proves the merkle proof actually does its job. It funds a recipient so a real membership proof
+     * exists, fetches the honest proof from the plugin RPC endpoint and confirms it VERIFIES against
+     * the returned state root, then tampers each input (the value, a proof node, the root, and the
+     * key) and asserts verification now FAILS. A client that trusts the node blindly could be lied
+     * to; a client that verifies the proof cannot.
+     *
+     * NOTE: like the other tutorial tests this is a live integration test. It verifies against the
+     * root the node returned; a production client authenticates that root independently via the
+     * quorum certificate before trusting it (see the verify docs in Verify.kt). Skips gracefully if
+     * the plugin RPC server is not reachable.
+     */
+    @Test
+    fun testFaucetProofTamperDetected() {
+        println("=== Kotlin Faucet Proof Tamper-Detection Test ===\n")
+
+        val networkId = NETWORK_ID
+        val chainId = CHAIN_ID
+        val txTimeoutMs = 120_000L
+        val recordTimeoutMs = 60_000L
+
+        // skip when the plugin RPC server isn't reachable (consistent with the other tutorial tests)
+        println("Checking plugin RPC server reachability at $PLUGIN_RPC_URL ...")
+        val reachable = try {
+            getRawJson("$PLUGIN_RPC_URL/v1/query/faucets")
+            true
+        } catch (e: Exception) {
+            println("  Plugin RPC server not reachable: ${e.message}")
+            false
+        }
+        Assumptions.assumeTrue(
+            reachable,
+            "plugin RPC server not reachable at $PLUGIN_RPC_URL (is Canopy running with the kotlin plugin and port 50010 exposed?)"
+        )
+        println("Plugin RPC server is reachable")
+
+        // fund a fresh recipient so a membership proof exists for its faucet record
+        val suffix = randomSuffix()
+        val recipientAddr = keystoreNewKey(ADMIN_RPC_URL, "test_proof_$suffix", TEST_PASSWORD)
+        println("  Created recipient account: $recipientAddr")
+        val recipientKey = keystoreGetKey(ADMIN_RPC_URL, recipientAddr, TEST_PASSWORD)
+
+        val height = getHeight(QUERY_RPC_URL)
+        println("  Current height: $height")
+        val txHash = sendFaucetTx(QUERY_RPC_URL, recipientKey, recipientAddr, 1000000000L, 10000L, networkId, chainId, height)
+        println("  Faucet transaction sent: $txHash")
+        assertTrue(waitForTxInclusion(QUERY_RPC_URL, recipientAddr, txHash, txTimeoutMs), "faucet tx not included")
+        println("  Faucet transaction confirmed!")
+        pollFaucetRecordUntil(recipientAddr, 1, recordTimeoutMs)
+            ?: fail("faucet record did not appear")
+
+        // fetch the honest proof envelope
+        val env = queryFaucetProofEnvelope(recipientAddr)
+        println("  Proof response: exists=${env.exists} height=${env.height} proofNodes=${env.proof.size}")
+        assertTrue(
+            env.exists && env.proof.isNotEmpty(),
+            "expected a membership proof; got exists=${env.exists} proofNodes=${env.proof.size}"
+        )
+
+        val key = env.key.hexToBytes()
+        val value = env.value.hexToBytes()
+        val root = env.stateRoot.hexToBytes()
+        val proof = env.proof
+
+        // positive control: the honest proof MUST verify against the returned state root
+        assertTrue(
+            verifyKeyProof(key, value, true, root, proof),
+            "honest faucet proof failed to verify against the state root"
+        )
+        println("  Honest faucet proof verified (${proof.size} node(s)) against the state root")
+
+        // negative cases: each tampered input MUST be rejected (verifyKeyProof returns false)
+        assertTrue(
+            !verifyKeyProof(key, flipFirstByte(value), true, root, proof),
+            "verification ACCEPTED a tampered value (expected failure)"
+        )
+
+        val badProof = cloneProof(proof)
+        badProof[0] = ProofNode(badProof[0].key, flipFirstByte(badProof[0].value), badProof[0].bitmask)
+        assertTrue(
+            !verifyKeyProof(key, value, true, root, badProof),
+            "verification ACCEPTED a tampered proof node (expected failure)"
+        )
+
+        assertTrue(
+            !verifyKeyProof(key, value, true, flipFirstByte(root), proof),
+            "verification ACCEPTED a tampered state root (expected failure)"
+        )
+
+        assertTrue(
+            !verifyKeyProof(flipFirstByte(key), value, true, root, proof),
+            "verification ACCEPTED a proof for the wrong key (expected failure)"
+        )
+
+        println("  All tampered faucet proofs were correctly rejected by the verifier")
+        println("\n--- Faucet proof tamper-detection verified successfully! ---")
     }
     
     // ============ Helper Functions ============
@@ -807,6 +948,67 @@ class RpcTest {
         val faucetObj = result["faucet"]?.jsonObject ?: return FaucetRecord("", 0L, 0L)
         return parseFaucetObject(faucetObj)
     }
+
+    /**
+     * Fetch a single recipient's faucet record along with its verifiable merkle proof and the
+     * committed stateRoot/height from the by-address plugin RPC endpoint.
+     */
+    private fun queryFaucetProof(address: String): FaucetProof {
+        val respBody = getRawJson("$PLUGIN_RPC_URL/v1/query/faucets?address=$address")
+        val result = json.parseToJsonElement(respBody).jsonObject
+        val faucetObj = result["faucet"]?.jsonObject
+        return FaucetProof(
+            height = result["height"]?.jsonPrimitive?.long ?: 0L,
+            stateRoot = result["stateRoot"]?.jsonPrimitive?.content ?: "",
+            key = result["key"]?.jsonPrimitive?.content ?: "",
+            exists = result["exists"]?.jsonPrimitive?.booleanOrNull ?: false,
+            value = result["value"]?.jsonPrimitive?.content ?: "",
+            proofSize = result["proof"]?.jsonArray?.size ?: 0,
+            faucet = if (faucetObj != null) parseFaucetObject(faucetObj) else FaucetRecord("", 0L, 0L)
+        )
+    }
+
+    /**
+     * Fetch a recipient's faucet record together with the committed value, state root, height, and
+     * the fully-decoded sparse-merkle-tree proof nodes from the by-address plugin RPC endpoint.
+     */
+    private fun queryFaucetProofEnvelope(address: String): FaucetProofEnvelope {
+        val respBody = getRawJson("$PLUGIN_RPC_URL/v1/query/faucets?address=$address")
+        val result = json.parseToJsonElement(respBody).jsonObject
+        val proofNodes = result["proof"]?.jsonArray?.map { element ->
+            val obj = element.jsonObject
+            ProofNode(
+                key = (obj["key"]?.jsonPrimitive?.content ?: "").hexToBytes(),
+                value = (obj["value"]?.jsonPrimitive?.content ?: "").hexToBytes(),
+                bitmask = obj["bitmask"]?.jsonPrimitive?.int ?: 0
+            )
+        } ?: emptyList()
+        return FaucetProofEnvelope(
+            height = result["height"]?.jsonPrimitive?.long ?: 0L,
+            stateRoot = result["stateRoot"]?.jsonPrimitive?.content ?: "",
+            key = result["key"]?.jsonPrimitive?.content ?: "",
+            exists = result["exists"]?.jsonPrimitive?.booleanOrNull ?: false,
+            value = result["value"]?.jsonPrimitive?.content ?: "",
+            proof = proofNodes
+        )
+    }
+
+    /**
+     * Return a copy of b with its first byte flipped (or a single byte if empty), so the result is
+     * guaranteed to differ from the original. Used to tamper proof inputs.
+     */
+    private fun flipFirstByte(b: ByteArray): ByteArray {
+        if (b.isEmpty()) return byteArrayOf(0xff.toByte())
+        val out = b.copyOf()
+        out[0] = (out[0].toInt() xor 0xff).toByte()
+        return out
+    }
+
+    /**
+     * Return a deep copy of a proof list so a test can tamper one node in isolation.
+     */
+    private fun cloneProof(input: List<ProofNode>): MutableList<ProofNode> =
+        input.map { ProofNode(it.key.copyOf(), it.value.copyOf(), it.bitmask) }.toMutableList()
 
     /**
      * Fetch all faucet records from the plugin RPC server (range read).

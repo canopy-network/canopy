@@ -6,6 +6,9 @@ import * as fs from 'fs/promises';
 import Long from 'long';
 
 import { types } from '../proto/types.js';
+// type-only import of the generated protobuf definitions so the detached proof query can use
+// concrete message types (ProofNode, PluginQueryResponse, …) instead of `any`
+import type { types as proto } from '../proto/index.js';
 
 // Normalize message IDs to consistent string format
 // protobufjs may return uint64 as Long or number depending on value
@@ -71,6 +74,30 @@ export async function NewConfigFromFile(filepath: string): Promise<Config> {
     const c = DefaultConfig();
     const parsed = JSON.parse(fileBytes) as Partial<Config>;
     return { ...c, ...parsed };
+}
+
+// StateProof is the result of a detached, read-only single-key query performed with `prove: true`.
+// It carries the value alongside the Sparse-Merkle-Tree (SMT) proof and the committed state root /
+// height required to verify that proof independently of the node that served it.
+export interface StateProof {
+    value: Uint8Array;
+    exists: boolean;
+    proof: proto.IProofNode[];
+    stateRoot: Uint8Array;
+    height: number;
+}
+
+// longToNumber() normalizes a protobuf uint64 (which may be a Long or a number) to a plain number.
+function longToNumber(v: number | Long | null | undefined): number {
+    if (v === undefined || v === null) {
+        return 0;
+    }
+    return Long.isLong(v) ? v.toNumber() : v;
+}
+
+// randQueryId() allocates a fresh random request id for a detached read key.
+function randQueryId(): Long {
+    return Long.fromNumber(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER));
 }
 
 // Plugin defines the 'VM-less' extension of the Finite State Machine
@@ -153,6 +180,54 @@ export class Plugin {
         }
         // return the unwrapped read response
         return [response.query.read, null];
+    }
+
+    // queryStateWithProof() executes a detached, read-only single-key state query with proofs enabled
+    // (`prove: true`) against Canopy at the given height (0 = latest committed). Like queryState(), it
+    // is NOT tied to an in-flight tx/block lifecycle and allocates its own random request id, making it
+    // safe to call from custom RPC handlers. It returns the value together with the Sparse-Merkle-Tree
+    // proof and the committed state root / height needed to verify that proof independently.
+    async queryStateWithProof(
+        height: number,
+        key: Uint8Array
+    ): Promise<[StateProof | null, IPluginError | null]> {
+        // send the detached single-key read with proof enabled and wait for a response
+        const [response, err] = await this.sendDetachedSync({
+            query: {
+                height,
+                read: { keys: [{ queryId: randQueryId(), key, prove: true }] }
+            }
+        });
+        if (err) {
+            return [null, err];
+        }
+        if (!response || !response.query) {
+            return [null, ErrUnexpectedFSMToPlugin(typeof response)];
+        }
+        const query = response.query as proto.IPluginQueryResponse;
+        // surface any FSM-side error attached to the query response
+        if (query.error) {
+            return [null, query.error as IPluginError];
+        }
+        // seed the result from the query response envelope (committed state root + height)
+        const out: StateProof = {
+            value: new Uint8Array(0),
+            exists: false,
+            proof: [],
+            stateRoot: query.stateRoot ?? new Uint8Array(0),
+            height: longToNumber(query.height)
+        };
+        // unwrap the first (and only) single-key read result: existence, proof and value
+        const results = query.read?.results;
+        if (results && results.length > 0) {
+            const res = results[0];
+            out.exists = res.exists ?? false;
+            out.proof = res.proof ?? [];
+            if (res.entries && res.entries.length > 0) {
+                out.value = res.entries[0].value ?? new Uint8Array(0);
+            }
+        }
+        return [out, null];
     }
 
     ListenForInbound(): void {

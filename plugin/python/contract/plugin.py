@@ -11,9 +11,9 @@ import logging
 import os
 import random
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Dict, Any, Set
+from typing import Optional, Dict, Any, List, Set
 
 # Import proto types
 from .proto import (
@@ -21,10 +21,12 @@ from .proto import (
     PluginToFSM,
     PluginConfig,
     PluginFSMConfig,
+    PluginKeyRead,
     PluginStateReadRequest,
     PluginStateReadResponse,
     PluginStateWriteRequest,
     PluginStateWriteResponse,
+    ProofNode,
 )
 
 from .error import (
@@ -79,6 +81,23 @@ def new_config_from_file(filepath: str) -> Config:
         )
     except Exception as err:
         raise ValueError(f"Failed to load config from {filepath}: {err}")
+
+
+@dataclass
+class StateProof:
+    """Result of a detached, read-only single-key query that also returns a sparse-merkle-tree proof.
+
+    Mirrors Go's StateProof. ``proof`` is the list of ProofNode entries returned by the FSM, and
+    ``exists`` distinguishes a membership proof (the key holds a non-empty value) from a
+    non-membership proof. ``state_root`` and ``height`` identify the committed snapshot the proof
+    commits to: a client authenticates ``state_root`` independently (via the quorum certificate) and
+    then verifies ``proof`` against it, so a lying node can only make verification fail, never forge.
+    """
+    value: bytes = b""
+    exists: bool = False
+    proof: List[ProofNode] = field(default_factory=list)
+    state_root: bytes = b""
+    height: int = 0
 
 
 class Plugin:
@@ -293,6 +312,70 @@ class Plugin:
                 )
             # return the unwrapped read response
             return query_response.read
+
+        except asyncio.TimeoutError:
+            raise err_plugin_timeout()
+        finally:
+            self._pending.pop(request_id, None)
+
+    async def query_state_with_proof(self, height: int, key: bytes) -> StateProof:
+        """QueryStateWithProof executes a detached, read-only single-key query against Canopy at the
+        given height (0 = latest committed) with prove=True, returning the value together with a
+        sparse-merkle-tree proof and the state root the proof commits to.
+
+        Like query_state(), it is NOT tied to an in-flight tx/block lifecycle and allocates its own
+        RANDOM request id, making it safe to call from custom RPC handlers. A client can authenticate
+        the returned state_root independently (via the quorum certificate) and verify the proof
+        against it; a lying node can only make verification fail, never forge a value. Matches Go's
+        Plugin.QueryStateWithProof.
+        """
+        # generate a fresh random request id (not tied to any in-flight FSM request)
+        request_id = random.getrandbits(64)
+
+        # create future for response
+        future: asyncio.Future = asyncio.Future()
+        self._pending[request_id] = future
+
+        # send the detached query request with a single proven key read
+        message = PluginToFSM()
+        message.id = request_id
+        message.query.height = height
+        message.query.read.keys.append(
+            PluginKeyRead(query_id=random.getrandbits(64), key=key, prove=True)
+        )
+
+        try:
+            logger.debug(f"0x{request_id:x}: query_state_with_proof (height={height})")
+            await self._send_proto_msg(message)
+
+            # wait for response with timeout
+            response = await asyncio.wait_for(future, timeout=10.0)
+
+            if not response.HasField("query"):
+                raise err_unexpected_fsm_to_plugin(type(response))
+
+            query_response = response.query
+            # surface any FSM-side error attached to the query response
+            if query_response.HasField("error"):
+                raise PluginError(
+                    query_response.error.code,
+                    query_response.error.module,
+                    query_response.error.msg,
+                )
+
+            # build the proof result; state_root/height identify the snapshot the proof commits to
+            out = StateProof(
+                state_root=query_response.state_root,
+                height=query_response.height,
+            )
+            read = query_response.read
+            if read.results:
+                res = read.results[0]
+                out.exists = res.exists
+                out.proof = list(res.proof)
+                if res.entries:
+                    out.value = res.entries[0].value
+            return out
 
         except asyncio.TimeoutError:
             raise err_plugin_timeout()

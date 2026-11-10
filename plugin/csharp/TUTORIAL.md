@@ -520,14 +520,62 @@ public async Task StartRpcServerAsync()
 }
 ```
 
-Each handler calls the detached, read-only `QueryStateAsync`:
+Each handler calls a detached, read-only query path:
 
-- Without `?address`, it does a **range read** over the record prefix (`FaucetPrefix()` / `RewardPrefix()`) and returns every record.
-- With `?address=<hex>`, it does a **single-key read** (`KeyForFaucet(addr)` / `KeyForReward(addr)`) and returns just that recipient's record.
+- Without `?address`, it does a **range read** over the record prefix (`FaucetPrefix()` / `RewardPrefix()`) via `QueryStateAsync` and returns every record.
+- With `?address=<hex>`, it does a **single-key read** (`KeyForFaucet(addr)` / `KeyForReward(addr)`) via `QueryStateWithProofAsync` and returns just that recipient's record **together with a sparse-merkle-tree proof** (see "Return a verifiable proof" below).
 
 > **Important — the range prefix must be length-prefixed.** Stored keys are length-prefixed (`KeyForFaucet(addr)` = `JoinLenPrefix(FaucetPrefixBytes, addr)`), so the prefix you pass to a **range read** must be length-prefixed too — that's exactly what `FaucetPrefix()` returns (`JoinLenPrefix(FaucetPrefixBytes)`, i.e. `[0x01, 0x64]`), **not** the raw byte `[0x64]`. Passing the raw prefix byte misaligns Canopy's length-prefixed iterator and crashes the node with `panic: corrupt or incomplete key`. (Single-key reads via `KeyForFaucet(addr)` are already length-prefixed, so they're unaffected.)
 
 Because the skeleton already starts the server from `Program.cs`, no change to `Program.cs` is needed — your new routes are served as soon as you rebuild.
+
+### Return a verifiable proof (recommended)
+
+A read endpoint that just echoes a value asks the caller to **trust the node**: a malicious or buggy node could return any number it likes. The detached query path can do better. When a single-key read sets `Prove = true`, the FSM returns, alongside the value, a **sparse-merkle-tree (SMT) proof** and the **state root** (plus the concrete committed `height` the query resolved at). This lets a client verify the result **trustlessly**:
+
+1. The client authenticates the `stateRoot` **independently** — it fetches the block/quorum certificate for `height` from consensus (not from this endpoint) and confirms the validator set signed off on that exact root.
+2. The client then verifies the returned `proof` against that trusted root. A membership proof (`exists == true`) proves the `key` maps to exactly `value`; a non-membership proof (`exists == false`) proves the key is absent.
+
+The key property: **a lying node can only make verification fail, never forge a value.** It cannot produce a valid proof for a value the state root doesn't actually commit to.
+
+The framework exposes this via `Plugin.QueryStateWithProofAsync(height, key)`, which returns a small `StateProof { byte[] Value; bool Exists; IReadOnlyList<ProofNode> Proof; byte[] StateRoot; ulong Height }`. Back the **by-address** (single-record) faucet handler with it and shape the JSON to carry everything a client needs to verify:
+
+```csharp
+// GET /v1/query/faucets?address=<hex>[&height=<uint64>]  (single record, with proof)
+private async Task HandleQueryFaucetByAddressAsync(HttpListenerContext context, byte[] addr, ulong height)
+{
+    // single-key read WITH a proof over the committed snapshot (height 0 = latest)
+    var key = Contract.KeyForFaucet(addr);
+    var sp = await QueryStateWithProofAsync(height, key);
+
+    // `faucet` is a convenience, decoded view of `value` — it is NOT part of what the proof commits to.
+    // Clients that care about trustlessness verify `proof` against `stateRoot`, then decode `value` themselves.
+    Faucet? faucet = null;
+    if (sp.Exists && sp.Value.Length > 0)
+    {
+        faucet = new Faucet();
+        faucet.MergeFrom(sp.Value);
+    }
+
+    WriteJson(context, new
+    {
+        height = sp.Height,
+        stateRoot = BytesToHex(sp.StateRoot),
+        key = BytesToHex(key),
+        exists = sp.Exists,
+        value = BytesToHex(sp.Value),
+        proof = sp.Proof.Select(n => new
+        {
+            key = BytesToHex(n.Key.ToByteArray()),
+            value = BytesToHex(n.Value.ToByteArray()),
+            bitmask = n.Bitmask
+        }),
+        faucet, // convenience view only (decoded from `value`); not covered by the proof
+    });
+}
+```
+
+The **by-address reward** handler follows the exact same pattern — read `Contract.KeyForReward(addr)` with `QueryStateWithProofAsync`, decode `value` into a `Reward`, and return the same `{height, stateRoot, key, exists, value, proof, reward}` shape. The range/list endpoints (no `?address`) stay on `QueryStateAsync`; proofs are a single-key feature.
 
 ### Query the endpoints
 
@@ -538,8 +586,20 @@ After faucet/reward transactions have been included in blocks:
 curl 'http://localhost:50010/v1/query/faucets'
 # {"faucets":[{"recipientAddress":"...","totalAmount":1000000000,"count":1}],"count":1,"height":0}
 
-# a single recipient's faucet record
+# a single recipient's faucet record, WITH a verifiable SMT proof (see "Return a verifiable proof")
 curl 'http://localhost:50010/v1/query/faucets?address=<recipient-hex>'
+# {
+#   "height": 128,
+#   "stateRoot": "9f3c...a1",                       // authenticate this independently via the quorum certificate
+#   "key": "0164...<recipient>",                    // the length-prefixed state key that was proven
+#   "exists": true,
+#   "value": "0a14...<faucet-protobuf-bytes>",      // raw bytes the proof commits to
+#   "proof": [                                      // leaf + sibling nodes; verify against stateRoot
+#     {"key": "...", "value": "...", "bitmask": 0},
+#     {"key": "...", "value": "...", "bitmask": 1}
+#   ],
+#   "faucet": {"recipientAddress":"...","totalAmount":1000000000,"count":1} // convenience view only (decoded from value)
+# }
 
 # all reward records (optionally at a historical height)
 curl 'http://localhost:50010/v1/query/rewards?height=42'
