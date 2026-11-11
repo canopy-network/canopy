@@ -383,16 +383,16 @@ func (x *MessageReward) GetAmount() uint64 {
 
 // MessageFaucet is a test-only transaction that mints tokens to any address
 // No balance check required - just mints tokens for testing purposes
+// NOTE: the minted amount is NOT carried on the message; it is taken from the plugin's
+// `pluginConfig.faucetAmount` (see TUTORIAL.md) so the faucet amount is operator-controlled.
 type MessageFaucet struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// signer_address: the address signing this transaction (for auth)
 	SignerAddress []byte `protobuf:"bytes,1,opt,name=signer_address,json=signerAddress,proto3" json:"signerAddress"` // @gotags: json:"signerAddress"
 	// recipient_address: who receives the tokens
 	RecipientAddress []byte `protobuf:"bytes,2,opt,name=recipient_address,json=recipientAddress,proto3" json:"recipientAddress"` // @gotags: json:"recipientAddress"
-	// amount: tokens to mint
-	Amount        uint64 `protobuf:"varint,3,opt,name=amount,proto3" json:"amount,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *MessageFaucet) Reset() {
@@ -439,13 +439,6 @@ func (x *MessageFaucet) GetRecipientAddress() []byte {
 	return nil
 }
 
-func (x *MessageFaucet) GetAmount() uint64 {
-	if x != nil {
-		return x.Amount
-	}
-	return 0
-}
-
 var File_tx_proto protoreflect.FileDescriptor
 
 const file_tx_proto_rawDesc = "" +
@@ -478,11 +471,10 @@ const file_tx_proto_rawDesc = "" +
 	"\rMessageReward\x12#\n" +
 	"\radmin_address\x18\x01 \x01(\fR\fadminAddress\x12+\n" +
 	"\x11recipient_address\x18\x02 \x01(\fR\x10recipientAddress\x12\x16\n" +
-	"\x06amount\x18\x03 \x01(\x04R\x06amount\"{\n" +
+	"\x06amount\x18\x03 \x01(\x04R\x06amount\"c\n" +
 	"\rMessageFaucet\x12%\n" +
 	"\x0esigner_address\x18\x01 \x01(\fR\rsignerAddress\x12+\n" +
-	"\x11recipient_address\x18\x02 \x01(\fR\x10recipientAddress\x12\x16\n" +
-	"\x06amount\x18\x03 \x01(\x04R\x06amountB3Z1github.com/canopy-network/go-plugin-test/contractb\x06proto3"
+	"\x11recipient_address\x18\x02 \x01(\fR\x10recipientAddressB3Z1github.com/canopy-network/go-plugin-test/contractb\x06proto3"
 
 var (
 	file_tx_proto_rawDescOnce sync.Once

@@ -11,9 +11,9 @@ import logging
 import os
 import random
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Dict, Any, Set
+from typing import Optional, Dict, Any, List, Set
 
 # Import proto types
 from .proto import (
@@ -21,10 +21,12 @@ from .proto import (
     PluginToFSM,
     PluginConfig,
     PluginFSMConfig,
+    PluginKeyRead,
     PluginStateReadRequest,
     PluginStateReadResponse,
     PluginStateWriteRequest,
     PluginStateWriteResponse,
+    ProofNode,
 )
 
 from .error import (
@@ -35,6 +37,7 @@ from .error import (
     err_invalid_plugin_resp_id,
     err_unexpected_fsm_to_plugin,
     err_invalid_fsm_to_plugin_message,
+    err_invalid_plugin_config,
 )
 from .contract import Contract, CONTRACT_CONFIG
 
@@ -55,6 +58,10 @@ class Config:
     data_dir_path: str = "/tmp/plugin/"
     # rpc_address is the listen address for the plugin's own HTTP server that exposes custom RPC endpoints
     rpc_address: str = "0.0.0.0:50010"
+    # plugin_config is an opaque, plugin-defined configuration value (any JSON). It mirrors the node
+    # config.json `pluginConfig` field; Canopy forwards that value to the plugin at handshake, and the
+    # plugin decodes + validates it into its own expected shape (see PluginSettings) at startup.
+    plugin_config: Any = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.chain_id, int) or self.chain_id < 1:
@@ -63,9 +70,46 @@ class Config:
             raise ValueError(f"Invalid data_dir_path: {self.data_dir_path}")
 
 
+@dataclass
+class PluginSettings:
+    """Typed, validated shape the plugin expects the opaque `pluginConfig` to take.
+
+    Keeping `pluginConfig` as free-form JSON on the wire lets each plugin define its own schema while
+    still failing fast at startup if the operator supplied something malformed. Mirrors Go's
+    PluginSettings.
+    """
+    # faucet_amount is the fixed amount (in uCNPY) minted per faucet transaction. It is operator
+    # controlled via config.json `pluginConfig.faucetAmount` rather than being supplied per request
+    # over RPC, so the node operator — not the caller — decides how much the faucet dispenses.
+    faucet_amount: int = 0
+
+
+def parse_plugin_config(raw: bytes) -> PluginSettings:
+    """Decode the opaque pluginConfig (raw JSON forwarded from the node's config.json) into the
+    plugin's expected PluginSettings shape and validate it.
+
+    This is the single place where the plugin asserts the operator-supplied blob is "in the expected
+    form"; it is called once at startup. A missing/empty pluginConfig yields zero settings so the base
+    plugin still starts; a malformed blob raises a PluginError. Mirrors Go's ParsePluginConfig.
+    """
+    settings = PluginSettings()
+    # a missing pluginConfig is treated as empty settings so the base plugin still starts
+    if not raw:
+        return settings
+    # the blob must be a well-formed JSON object matching PluginSettings
+    try:
+        data = json.loads(raw)
+    except (ValueError, TypeError) as err:
+        raise err_invalid_plugin_config(str(err))
+    if not isinstance(data, dict):
+        raise err_invalid_plugin_config("expected a JSON object")
+    settings.faucet_amount = int(data.get("faucetAmount", 0) or 0)
+    return settings
+
+
 def default_config() -> Config:
     """Return the default configuration (matching Go's DefaultConfig)."""
-    return Config(chain_id=1, data_dir_path="/tmp/plugin/", rpc_address="0.0.0.0:50010")
+    return Config(chain_id=1, data_dir_path="/tmp/plugin/", rpc_address="0.0.0.0:50010", plugin_config=None)
 
 
 def new_config_from_file(filepath: str) -> Config:
@@ -76,9 +120,27 @@ def new_config_from_file(filepath: str) -> Config:
             chain_id=config_data.get("chainId", 1),
             data_dir_path=config_data.get("dataDirPath", "/tmp/plugin/"),
             rpc_address=config_data.get("rpcAddress", "0.0.0.0:50010"),
+            plugin_config=config_data.get("pluginConfig", None),
         )
     except Exception as err:
         raise ValueError(f"Failed to load config from {filepath}: {err}")
+
+
+@dataclass
+class StateProof:
+    """Result of a detached, read-only single-key query that also returns a sparse-merkle-tree proof.
+
+    Mirrors Go's StateProof. ``proof`` is the list of ProofNode entries returned by the FSM, and
+    ``exists`` distinguishes a membership proof (the key holds a non-empty value) from a
+    non-membership proof. ``state_root`` and ``height`` identify the committed snapshot the proof
+    commits to: a client authenticates ``state_root`` independently (via the quorum certificate) and
+    then verifies ``proof`` against it, so a lying node can only make verification fail, never forge.
+    """
+    value: bytes = b""
+    exists: bool = False
+    proof: List[ProofNode] = field(default_factory=list)
+    state_root: bytes = b""
+    height: int = 0
 
 
 class Plugin:
@@ -91,6 +153,8 @@ class Plugin:
         self.config = config
         self.fsm_config: Optional[PluginFSMConfig] = None
         self.plugin_config = PluginConfig()
+        # settings is the typed, validated form of the opaque pluginConfig (set at handshake)
+        self.settings = PluginSettings()
         self._reader: Optional[asyncio.StreamReader] = None
         self._writer: Optional[asyncio.StreamWriter] = None
         self._pending: Dict[int, asyncio.Future] = {}
@@ -299,6 +363,70 @@ class Plugin:
         finally:
             self._pending.pop(request_id, None)
 
+    async def query_state_with_proof(self, height: int, key: bytes) -> StateProof:
+        """QueryStateWithProof executes a detached, read-only single-key query against Canopy at the
+        given height (0 = latest committed) with prove=True, returning the value together with a
+        sparse-merkle-tree proof and the state root the proof commits to.
+
+        Like query_state(), it is NOT tied to an in-flight tx/block lifecycle and allocates its own
+        RANDOM request id, making it safe to call from custom RPC handlers. A client can authenticate
+        the returned state_root independently (via the quorum certificate) and verify the proof
+        against it; a lying node can only make verification fail, never forge a value. Matches Go's
+        Plugin.QueryStateWithProof.
+        """
+        # generate a fresh random request id (not tied to any in-flight FSM request)
+        request_id = random.getrandbits(64)
+
+        # create future for response
+        future: asyncio.Future = asyncio.Future()
+        self._pending[request_id] = future
+
+        # send the detached query request with a single proven key read
+        message = PluginToFSM()
+        message.id = request_id
+        message.query.height = height
+        message.query.read.keys.append(
+            PluginKeyRead(query_id=random.getrandbits(64), key=key, prove=True)
+        )
+
+        try:
+            logger.debug(f"0x{request_id:x}: query_state_with_proof (height={height})")
+            await self._send_proto_msg(message)
+
+            # wait for response with timeout
+            response = await asyncio.wait_for(future, timeout=10.0)
+
+            if not response.HasField("query"):
+                raise err_unexpected_fsm_to_plugin(type(response))
+
+            query_response = response.query
+            # surface any FSM-side error attached to the query response
+            if query_response.HasField("error"):
+                raise PluginError(
+                    query_response.error.code,
+                    query_response.error.module,
+                    query_response.error.msg,
+                )
+
+            # build the proof result; state_root/height identify the snapshot the proof commits to
+            out = StateProof(
+                state_root=query_response.state_root,
+                height=query_response.height,
+            )
+            read = query_response.read
+            if read.results:
+                res = read.results[0]
+                out.exists = res.exists
+                out.proof = list(res.proof)
+                if res.entries:
+                    out.value = res.entries[0].value
+            return out
+
+        except asyncio.TimeoutError:
+            raise err_plugin_timeout()
+        finally:
+            self._pending.pop(request_id, None)
+
     async def _listen_for_inbound(self) -> None:
         """ListenForInbound routes inbound requests from the plugin."""
         if not self._reader:
@@ -376,6 +504,15 @@ class Plugin:
             if msg.HasField("config"):
                 logger.info("Received FSM config response")
                 self.fsm_config = msg.config
+                # decode + validate the opaque pluginConfig the node forwarded from its config.json.
+                # This is the 'expected form' check: a malformed blob fails the handshake and the
+                # plugin exits (fail fast), mirroring Go's StartPlugin log.Fatal on a bad pluginConfig.
+                try:
+                    self.settings = parse_plugin_config(msg.config.plugin_config)
+                except PluginError as cfg_err:
+                    logger.error(f"invalid pluginConfig, cannot start plugin: {cfg_err}")
+                    os._exit(1)
+                logger.info(f"Loaded pluginConfig: faucetAmount={self.settings.faucet_amount}")
                 return  # No response needed
 
             elif msg.HasField("genesis"):
