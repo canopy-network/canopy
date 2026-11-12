@@ -61,12 +61,14 @@
 - /debug/pprof
 - /debug/pprof/*name
 - /v1/eth
-- /v1/admin/keystore
+- /v1/admin/keystore-nicknames
 - /v1/admin/keystore-new-key
 - /v1/admin/keystore-import
 - /v1/admin/keystore-import-raw
 - /v1/admin/keystore-delete
 - /v1/admin/keystore-get
+- /v1/admin/keystore-export
+- /v1/admin/keystore-rename
 - /v1/admin/tx-send
 - /v1/admin/tx-stake
 - /v1/admin/tx-edit-stake
@@ -3484,43 +3486,32 @@ Submits the same signed transaction accepted by `eth_sendRawTransaction`, but re
 
 🚨**Important: All admin commands assume secure https connection**
 
-## Keystore
+## Keystore Nicknames
 
-**Route:** `/v1/admin/keystore`
+**Route:** `/v1/admin/keystore-nicknames`
 
-**Description**: responds with the local keystore
+**Description**: responds with a lightweight, non-sensitive list of the local keys (address, nickname, public key). It omits all encrypted private key material so it can cheaply back account listings and dropdowns.
 
 **HTTP Method**: `GET`
 
 **Request**: `None`
 
-**Response**:
-- **addressMap**: `object` - the map of addresses to keystore entry `[hex-address] -> keystoreEntry`
-  - **publicKey**: `hex-string` -  the public code that can cryptographically verify signatures from the private key
-  - **salt**: `hex-string` - random 16 bytes salt
-  - **encrypted**: `hex-string` - the private key encrypted with AES-GCM
-  - **keyAddress**: `hex-string` - the address of the key
-  - **keyNickname**: `string` - the nickname of the key
-- **nicknameMap**: `object` the map of nicknames to address `[nickname] -> hex-address`
+**Response**: `object` - the map of addresses to a non-sensitive entry `[hex-address] -> entry`
+- **address**: `hex-string` - the address of the key
+- **nickname**: `string` - the nickname of the key (empty when none)
+- **publicKey**: `hex-string` - the public code that can cryptographically verify signatures from the private key
 
 
 ```
-$ curl -X GET http://localhost:50003/v1/admin/keystore \
+$ curl -X GET http://localhost:50003/v1/admin/keystore-nicknames \
   -H "Content-Type: application/json" \
   -d '{}'
 
 > {
-  "addressMap": {
-    "b0b4a45ca70104ecc943a49e4553f0e7e1135b01": {
-      "publicKey": "8cb57bdcc0f90c36aea48a6edab31996400af55f623f676a3c64c04b826454aea227f14d1b70c150d5fa9fe5f6790f60",
-      "salt": "aff12414025b261cc56fbeaeb5dcf5f4",
-      "encrypted": "eb3d900e781a2de743bcc804737753cbe7440bffab18419409517db0a2bf98b8028f69aba271f482b838c6de8e8b8292",
-      "keyAddress": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
-      "keyNickname": "my_key"
-    }
-  },
-  "nicknameMap": {
-    "my_key": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+  "b0b4a45ca70104ecc943a49e4553f0e7e1135b01": {
+    "address": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "nickname": "my_key",
+    "publicKey": "8cb57bdcc0f90c36aea48a6edab31996400af55f623f676a3c64c04b826454aea227f14d1b70c150d5fa9fe5f6790f60"
   }
 }
 ```
@@ -3668,6 +3659,82 @@ $ curl -X POST http://localhost:50003/v1/admin/keystore-get \
   "publicKey": "acb57b23c0f90c16aea48a6edbb31996400af55f623f676a3c64c04b826454aea227f14d1b70c151d5fa9fe536790f6d",
   "privateKey": "ed3c9acd8fffa374756ba1c175af5228f9e4e96c0ecdfda0a9fd9afa09472e12"
 }
+```
+
+## Keystore Export
+
+**Route:** `/v1/admin/keystore-export`
+
+**Description**: responds with a single encrypted keyfile for an address or nickname, but only after the supplied password is verified. Use this to back up an individual key instead of exporting the whole keystore.
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **nickname**: `string` - the nickname associated with the key
+- **address**: `hex-string` - the address associated with the key
+- **password**: `string` - **(required)** the plain-text password used to encrypt the key
+
+**Response**: a keystore containing only the requested key
+- **addressMap**: `object` - the map of addresses to keystore entry `[hex-address] -> keystoreEntry`
+  - **publicKey**: `hex-string` - the public code that can cryptographically verify signatures from the private key
+  - **salt**: `hex-string` - random 16 bytes salt
+  - **encrypted**: `hex-string` - the private key encrypted with AES-GCM
+  - **keyAddress**: `hex-string` - the address of the key
+  - **keyNickname**: `string` - the nickname of the key
+- **nicknameMap**: `object` - the map of nicknames to address `[nickname] -> hex-address`
+
+
+```
+$ curl -X POST http://localhost:50003/v1/admin/keystore-export \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nickname":"my_key",
+    "password":"test"
+    }'
+
+> {
+  "addressMap": {
+    "b0b4a45ca70104ecc943a49e4553f0e7e1135b01": {
+      "publicKey": "8cb57bdcc0f90c36aea48a6edab31996400af55f623f676a3c64c04b826454aea227f14d1b70c150d5fa9fe5f6790f60",
+      "salt": "aff12414025b261cc56fbeaeb5dcf5f4",
+      "encrypted": "eb3d900e781a2de743bcc804737753cbe7440bffab18419409517db0a2bf98b8028f69aba271f482b838c6de8e8b8292",
+      "keyAddress": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+      "keyNickname": "my_key"
+    }
+  },
+  "nicknameMap": {
+    "my_key": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01"
+  }
+}
+```
+
+## Keystore Rename
+
+**Route:** `/v1/admin/keystore-rename`
+
+**Description**: changes the nickname associated with a key (identified by address or current nickname) without touching the encrypted private key material, after validating the password
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **nickname**: `string` - the current nickname associated with the key (optional if address is supplied)
+- **address**: `hex-string` - the address associated with the key (optional if nickname is supplied)
+- **newNickname**: `string` - **(required)** the new nickname for the key
+- **password**: `string` - **(required)** the plain-text password used to encrypt the key
+
+**Response**: `hex-string` - the 20 byte address of the renamed key
+
+
+```
+$ curl -X POST http://localhost:50003/v1/admin/keystore-rename \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address":"b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "newNickname":"my_renamed_key",
+    "password":"my_password"
+    }'
+
+> "b0b4a45ca70104ecc943a49e4553f0e7e1135b01"
 ```
 
 ## Txn Send

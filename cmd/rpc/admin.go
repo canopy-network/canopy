@@ -23,19 +23,6 @@ import (
 	"github.com/shirou/gopsutil/process"
 )
 
-// Keystore responds with the local keystore
-func (s *Server) Keystore(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	// Attempt to create a new keystore from the specified file path.
-	keystore, err := crypto.NewKeystoreFromFile(s.config.DataDirPath)
-	if err != nil {
-		write(w, err, http.StatusBadRequest)
-		return
-	}
-
-	// Write keystore to http response
-	write(w, keystore, http.StatusOK)
-}
-
 // KeystoreNewKey adds a new key to the keystore
 func (s *Server) KeystoreNewKey(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Call the keystore handler with a callback to create and import a new private key
@@ -114,6 +101,48 @@ func (s *Server) KeystoreGetKeyGroup(w http.ResponseWriter, r *http.Request, _ h
 			Address:  ptr.Address,
 			Nickname: ptr.Nickname,
 		})
+	})
+}
+
+// KeystoreNicknames responds with a lightweight, non-sensitive list of the local keys (address,
+// nickname, public key). It omits all encrypted private key material so the wallet UI can populate
+// account listings and dropdowns cheaply, without exporting the whole keystore.
+func (s *Server) KeystoreNicknames(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Attempt to create a new keystore from the specified file path.
+	keystore, err := crypto.NewKeystoreFromFile(s.config.DataDirPath)
+	if err != nil {
+		write(w, err, http.StatusBadRequest)
+		return
+	}
+	// Write the non-sensitive nickname list to the http response
+	write(w, keystore.Nicknames(), http.StatusOK)
+}
+
+// KeystoreExport responds with a single encrypted key (keyfile) for an address or nickname, but only
+// after the supplied password is verified. This replaces exporting the whole keystore for backups.
+func (s *Server) KeystoreExport(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Call the keystore handler with a callback that returns the password-verified single-key keystore
+	s.keystoreHandler(w, r, func(k *crypto.Keystore, ptr *keystoreRequest) (any, error) {
+		return k.ExportKey(ptr.Password, crypto.GetKeyGroupOpts{
+			Address:  ptr.Address,
+			Nickname: ptr.Nickname,
+		})
+	})
+}
+
+// KeystoreRename changes the nickname associated with a key and persists the keystore to disk
+func (s *Server) KeystoreRename(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Call the keystore handler with a callback that updates the nickname
+	s.keystoreHandler(w, r, func(k *crypto.Keystore, ptr *keystoreRequest) (any, error) {
+		if err := k.UpdateNickname(ptr.Password, crypto.RenameOpts{
+			Address:     ptr.Address,
+			Nickname:    ptr.Nickname,
+			NewNickname: ptr.NewNickname,
+		}); err != nil {
+			return nil, err
+		}
+		// Update the keystore on disk and return the account address
+		return ptr.Address, k.SaveToFile(s.config.DataDirPath)
 	})
 }
 
