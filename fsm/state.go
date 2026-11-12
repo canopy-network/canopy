@@ -856,11 +856,31 @@ func (s *StateMachine) StateRead(request *lib.PluginStateReadRequest) (response 
 		if err != nil {
 			return
 		}
-		// add to the response
-		response.Results = append(response.Results, &lib.PluginReadResult{
+		// build the base result
+		result := &lib.PluginReadResult{
 			QueryId: getRequest.QueryId,
 			Entries: []*lib.PluginStateEntry{{Key: getRequest.Key, Value: value}},
-		})
+		}
+		// if a proof was requested, attach the merkle membership/non-membership proof for the key.
+		// NOTE: this is only meaningful on the detached, read-only query path (a committed snapshot,
+		// whose store implements ProveStoreI). Lifecycle reads never set prove, so the live store is
+		// untouched here.
+		if getRequest.Prove {
+			prover, ok := s.Store().(lib.ProveStoreI)
+			if !ok {
+				err = ErrWrongStoreType()
+				return
+			}
+			var proof []*lib.Node
+			if proof, err = prover.GetProof(getRequest.Key); err != nil {
+				return
+			}
+			result.Proof = pluginProofNodes(proof)
+			// a non-empty value means the key exists (membership); empty means absence
+			result.Exists = len(value) != 0
+		}
+		// add to the response
+		response.Results = append(response.Results, result)
 	}
 	// for each 'iteration' request
 	for _, r := range request.Ranges {
@@ -897,6 +917,16 @@ func (s *StateMachine) StateRead(request *lib.PluginStateReadRequest) (response 
 		})
 	}
 	return
+}
+
+// pluginProofNodes() converts internal sparse-merkle-tree proof nodes into the plugin wire shape
+// (key, value, bitmask) consumed by light clients to reconstruct the root and verify the proof.
+func pluginProofNodes(proof []*lib.Node) []*lib.ProofNode {
+	out := make([]*lib.ProofNode, len(proof))
+	for i, n := range proof {
+		out[i] = &lib.ProofNode{Key: n.Key, Value: n.Value, Bitmask: n.Bitmask}
+	}
+	return out
 }
 
 // StateWrite() implements the 'state write' interface for plugins

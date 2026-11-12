@@ -25,6 +25,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'proto'))
 from google.protobuf import any_pb2
 import tx_pb2
 
+# Self-contained, dependency-free client-side SMT proof verifier (stdlib only). Lives alongside this
+# test file so a trustless client can verify the merkle proofs returned by the plugin RPC endpoints.
+from verify import ProofNode, verify_key_proof
+
 # BLS12-381 signing using blspy
 from blspy import PrivateKey, BasicSchemeMPL
 
@@ -34,6 +38,12 @@ ADMIN_RPC_URL = "http://localhost:50003"  # Admin endpoints (keystore management
 NETWORK_ID = 1
 CHAIN_ID = 1
 TEST_PASSWORD = "testpassword123"
+
+# FAUCET_CONFIGURED_AMOUNT is the fixed amount (uCNPY) the plugin mints per faucet transaction. The
+# faucet amount is NO LONGER supplied over RPC; it is operator-controlled via config.json
+# `pluginConfig.faucetAmount` (forwarded to the plugin at handshake — see TUTORIAL.md). Keep this
+# constant in sync with the `faucetAmount` configured in the node's config.json for these tests.
+FAUCET_CONFIGURED_AMOUNT = 1000000000  # 1000 tokens
 
 
 @dataclass
@@ -238,7 +248,7 @@ def build_sign_and_send_tx(
         msg = tx_pb2.MessageFaucet()
         msg.signer_address = hex_to_bytes(msg_json['signerAddress'])
         msg.recipient_address = hex_to_bytes(msg_json['recipientAddress'])
-        msg.amount = msg_json['amount']
+        # NOTE: no amount — the faucet mints the operator-controlled pluginConfig.faucetAmount
         msg_proto = msg.SerializeToString()
     else:
         raise ValueError(f"Unknown message type: {msg_type}")
@@ -287,17 +297,19 @@ def send_faucet_tx(
     rpc_url: str,
     signer_key: KeyGroup,
     recipient_addr: str,
-    amount: int,
     fee: int,
     network_id: int,
     chain_id: int,
     height: int
 ) -> str:
-    """Send a faucet transaction."""
+    """Send a faucet transaction.
+
+    Note there is no amount parameter: the minted amount comes from the plugin's
+    pluginConfig.faucetAmount, not from the caller/RPC.
+    """
     faucet_msg = {
         'signerAddress': signer_key.address,
         'recipientAddress': recipient_addr,
-        'amount': amount,
     }
     
     return build_sign_and_send_tx(rpc_url, signer_key, 'faucet', faucet_msg, fee, network_id, chain_id, height)
@@ -356,10 +368,20 @@ def get_raw_json(url: str) -> str:
         raise Exception(f"HTTP {e.code}: {error_body}")
 
 
+def query_faucet_response(plugin_url: str, address: str) -> dict:
+    """Fetch the full by-address faucet response (proof envelope + decoded record) from the plugin.
+
+    Unlike query_faucet_record(), which returns just the convenience `faucet` view, this returns the
+    whole JSON object so callers can inspect the verifiable-proof fields (stateRoot, height, proof,
+    exists, value, key).
+    """
+    resp_body = get_raw_json(f"{plugin_url}/v1/query/faucets?address={address}")
+    return json.loads(resp_body)
+
+
 def query_faucet_record(plugin_url: str, address: str) -> dict:
     """Fetch a single recipient's faucet record from the plugin RPC server."""
-    resp_body = get_raw_json(f"{plugin_url}/v1/query/faucets?address={address}")
-    return json.loads(resp_body).get('faucet', {})
+    return query_faucet_response(plugin_url, address).get('faucet', {})
 
 
 def query_faucet_list(plugin_url: str) -> list:
@@ -468,6 +490,33 @@ def validate_reward_records(records: list) -> None:
              f"the endpoint may be reading colliding core state")
 
 
+def to_verify_proof(nodes: list) -> list:
+    """Convert the JSON proof envelope (hex strings) into the verifier's ProofNode list."""
+    out: list = []
+    for n in nodes:
+        out.append(ProofNode(
+            key=bytes.fromhex(n.get('key', '')),
+            value=bytes.fromhex(n.get('value', '')),
+            bitmask=int(n.get('bitmask', 0)),
+        ))
+    return out
+
+
+def flip_first_byte(b: bytes) -> bytes:
+    """Return a copy of b with its first byte flipped (or a single byte if empty), so the result is
+    guaranteed to differ from the original. Used to tamper proof inputs."""
+    out = bytearray(b)
+    if len(out) == 0:
+        return b"\xff"
+    out[0] ^= 0xFF
+    return bytes(out)
+
+
+def clone_proof(proof: list) -> list:
+    """Return a deep copy of a proof list so a test can tamper one node in isolation."""
+    return [ProofNode(key=bytes(n.key), value=bytes(n.value), bitmask=n.bitmask) for n in proof]
+
+
 def _skip(message: str) -> None:
     """Skip the test: use pytest.skip when running under pytest, else print and return gracefully."""
     try:
@@ -526,14 +575,13 @@ def test_plugin_custom_rpc_endpoints() -> None:
 
     fee = 10000
 
-    # Step 2: Faucet the recipient twice and verify the aggregated faucet record
-    faucet_amount1 = 700000000
-    faucet_amount2 = 300000000
-
-    print(f"\nStep 2: Sending first faucet to recipient (amount={faucet_amount1}, fee={fee})...")
+    # Step 2: Faucet the recipient twice and verify the aggregated faucet record. Each faucet mints
+    # the fixed pluginConfig.faucetAmount (not an RPC-supplied amount), so the record should aggregate
+    # in multiples of that configured amount.
+    print(f"\nStep 2: Sending first faucet to recipient (amount from pluginConfig={FAUCET_CONFIGURED_AMOUNT}, fee={fee})...")
     height = get_height(QUERY_RPC_URL)
     print(f"Current height: {height}")
-    tx_hash = send_faucet_tx(QUERY_RPC_URL, recipient_key, recipient_addr, faucet_amount1, fee, NETWORK_ID, CHAIN_ID, height)
+    tx_hash = send_faucet_tx(QUERY_RPC_URL, recipient_key, recipient_addr, fee, NETWORK_ID, CHAIN_ID, height)
     print(f"First faucet transaction sent: {tx_hash}")
 
     print("Waiting for first faucet transaction to be confirmed...")
@@ -541,22 +589,23 @@ def test_plugin_custom_rpc_endpoints() -> None:
         raise Exception("First faucet tx not included within timeout")
     print("First faucet transaction confirmed!")
 
-    # after the first faucet, the record should exist with count=1 and totalAmount=faucet_amount1
+    # after the first faucet, the record should exist with count=1 and totalAmount=FAUCET_CONFIGURED_AMOUNT
     print(f"Querying plugin endpoint GET /v1/query/faucets?address={recipient_addr} ...")
     faucet = poll_faucet_record(plugin_rpc_url, recipient_addr, record_timeout)
     print(f"Faucet record after first faucet: recipient={faucet.get('recipientAddress')} "
           f"totalAmount={faucet.get('totalAmount')} count={faucet.get('count')}")
     assert faucet.get('count') == 1, f"faucet count after first faucet = {faucet.get('count')}, want 1"
-    assert faucet.get('totalAmount') == faucet_amount1, \
-        f"faucet totalAmount after first faucet = {faucet.get('totalAmount')}, want {faucet_amount1}"
+    assert faucet.get('totalAmount') == FAUCET_CONFIGURED_AMOUNT, \
+        (f"faucet totalAmount after first faucet = {faucet.get('totalAmount')}, "
+         f"want pluginConfig.faucetAmount={FAUCET_CONFIGURED_AMOUNT}")
     assert faucet.get('recipientAddress', '').lower() == recipient_addr.lower(), \
         f"faucet recipientAddress = {faucet.get('recipientAddress')}, want {recipient_addr}"
     print("Faucet record verified after first faucet (count=1)")
 
-    print(f"Sending second faucet to recipient (amount={faucet_amount2}, fee={fee})...")
+    print(f"Sending second faucet to recipient (amount from pluginConfig={FAUCET_CONFIGURED_AMOUNT}, fee={fee})...")
     height = get_height(QUERY_RPC_URL)
     print(f"Current height: {height}")
-    tx_hash = send_faucet_tx(QUERY_RPC_URL, recipient_key, recipient_addr, faucet_amount2, fee, NETWORK_ID, CHAIN_ID, height)
+    tx_hash = send_faucet_tx(QUERY_RPC_URL, recipient_key, recipient_addr, fee, NETWORK_ID, CHAIN_ID, height)
     print(f"Second faucet transaction sent: {tx_hash}")
 
     print("Waiting for second faucet transaction to be confirmed...")
@@ -564,8 +613,8 @@ def test_plugin_custom_rpc_endpoints() -> None:
         raise Exception("Second faucet tx not included within timeout")
     print("Second faucet transaction confirmed!")
 
-    # after the second faucet, count should be 2 and totalAmount the sum of both
-    want_total = faucet_amount1 + faucet_amount2
+    # after the second faucet, count should be 2 and totalAmount twice the configured faucet amount
+    want_total = 2 * FAUCET_CONFIGURED_AMOUNT
     print("Waiting for faucet record to reflect the second faucet (count=2)...")
     faucet = poll_faucet_record_until(plugin_rpc_url, recipient_addr, 2, record_timeout)
     print(f"Faucet record after second faucet: recipient={faucet.get('recipientAddress')} "
@@ -574,6 +623,23 @@ def test_plugin_custom_rpc_endpoints() -> None:
     assert faucet.get('totalAmount') == want_total, \
         f"faucet totalAmount after second faucet = {faucet.get('totalAmount')}, want {want_total}"
     print(f"Faucet record aggregation verified (totalAmount={want_total}, count=2)")
+
+    # the by-address endpoint should also return a verifiable proof envelope: a non-empty state root,
+    # the concrete committed height it resolved at, a non-empty SMT proof, and exists=True for a key
+    # that holds a value. A trustless client authenticates stateRoot via the quorum certificate and
+    # verifies value+proof against it.
+    print("Verifying the by-address faucet endpoint returns a verifiable proof...")
+    faucet_resp = query_faucet_response(plugin_rpc_url, recipient_addr)
+    assert faucet_resp.get('stateRoot'), \
+        f"faucet response missing non-empty stateRoot: {faucet_resp.get('stateRoot')!r}"
+    assert int(faucet_resp.get('height', 0)) > 0, \
+        f"faucet response height = {faucet_resp.get('height')}, want > 0"
+    assert faucet_resp.get('exists') is True, \
+        f"faucet response exists = {faucet_resp.get('exists')}, want True"
+    assert faucet_resp.get('proof'), \
+        f"faucet response missing non-empty proof: {faucet_resp.get('proof')!r}"
+    print(f"Proof verified: height={faucet_resp.get('height')} "
+          f"stateRoot={str(faucet_resp.get('stateRoot'))[:16]}… proofNodes={len(faucet_resp.get('proof') or [])}")
 
     # the recipient should also appear in the list (range-read) endpoint
     print("Querying plugin endpoint GET /v1/query/faucets (list / range read)...")
@@ -591,7 +657,7 @@ def test_plugin_custom_rpc_endpoints() -> None:
     print("\nStep 3: Funding admin via faucet so it can pay the reward fee...")
     height = get_height(QUERY_RPC_URL)
     print(f"Current height: {height}")
-    tx_hash = send_faucet_tx(QUERY_RPC_URL, admin_key, admin_addr, 100000000, fee, NETWORK_ID, CHAIN_ID, height)
+    tx_hash = send_faucet_tx(QUERY_RPC_URL, admin_key, admin_addr, fee, NETWORK_ID, CHAIN_ID, height)
     print(f"Admin faucet transaction sent: {tx_hash}")
 
     print("Waiting for admin faucet transaction to be confirmed...")
@@ -664,6 +730,86 @@ def test_plugin_custom_rpc_endpoints() -> None:
     print(f"  curl '{plugin_rpc_url}/v1/query/rewards'")
 
 
+def test_faucet_proof_tamper_detected() -> None:
+    """Prove the merkle proof actually does its job.
+
+    It funds a fresh recipient so a real membership proof exists, fetches the honest proof from the
+    plugin RPC endpoint and confirms it VERIFIES against the returned state root, then tampers each
+    input (the value, a proof node, the state root, and the key) and asserts verification now FAILS. A
+    client that trusts the node blindly could be lied to; a client that verifies the proof cannot.
+
+    NOTE: like the other tutorial tests this is a live integration test. It verifies against the root
+    the node returned; a production client authenticates that root independently via the quorum
+    certificate before trusting it (see the verify module docstring).
+    """
+    print("=== Python Faucet Proof Tamper-Detection Test ===\n")
+
+    plugin_rpc_url = "http://localhost:50010"  # the plugin's own custom RPC server
+    tx_timeout = 120      # max wait for a tx to be committed + indexed
+    record_timeout = 60   # max wait for the plugin RPC record to reflect committed state
+
+    # skip when the plugin RPC server isn't reachable (consistent with the other tutorial tests)
+    print(f"Checking plugin RPC server reachability at {plugin_rpc_url} ...")
+    try:
+        get_raw_json(f"{plugin_rpc_url}/v1/query/faucets")
+    except Exception as e:
+        _skip(
+            f"plugin RPC server not reachable at {plugin_rpc_url} "
+            f"(is Canopy running with the python plugin and port 50010 exposed?): {e}"
+        )
+        return
+    print("Plugin RPC server is reachable")
+
+    # fund a fresh recipient so a membership proof exists for its faucet record
+    suffix = random_suffix()
+    recipient_addr = keystore_new_key(ADMIN_RPC_URL, f"test_proof_{suffix}", TEST_PASSWORD)
+    recipient_key = keystore_get_key(ADMIN_RPC_URL, recipient_addr, TEST_PASSWORD)
+    print(f"Created recipient account: {recipient_addr}")
+
+    height = get_height(QUERY_RPC_URL)
+    tx_hash = send_faucet_tx(QUERY_RPC_URL, recipient_key, recipient_addr, 10000, NETWORK_ID, CHAIN_ID, height)
+    print(f"Faucet transaction sent: {tx_hash}")
+    if not wait_for_tx_inclusion(QUERY_RPC_URL, recipient_addr, tx_hash, tx_timeout):
+        raise Exception("faucet tx not included within timeout")
+    print("Faucet transaction confirmed!")
+    poll_faucet_record(plugin_rpc_url, recipient_addr, record_timeout)
+
+    # fetch the honest proof envelope
+    env = query_faucet_response(plugin_rpc_url, recipient_addr)
+    assert env.get('exists') is True and env.get('proof'), \
+        f"expected a membership proof; got exists={env.get('exists')} proofNodes={len(env.get('proof') or [])}"
+    key = bytes.fromhex(env['key'])
+    value = bytes.fromhex(env['value'])
+    root = bytes.fromhex(env['stateRoot'])
+    proof = to_verify_proof(env['proof'])
+
+    # positive control: the honest proof MUST verify against the returned state root
+    assert verify_key_proof(key, value, True, root, proof), \
+        "honest faucet proof failed to verify against the state root"
+    print(f"Honest faucet proof verified ({len(proof)} node(s)) against the state root")
+
+    # negative cases: each tampered input MUST be rejected (verify returns False)
+    assert not verify_key_proof(key, flip_first_byte(value), True, root, proof), \
+        "verification ACCEPTED a tampered value (expected failure)"
+    print("Tampered value correctly rejected")
+
+    bad = clone_proof(proof)
+    bad[0].value = flip_first_byte(bad[0].value)
+    assert not verify_key_proof(key, value, True, root, bad), \
+        "verification ACCEPTED a tampered proof node (expected failure)"
+    print("Tampered proof node correctly rejected")
+
+    assert not verify_key_proof(key, value, True, flip_first_byte(root), proof), \
+        "verification ACCEPTED a tampered state root (expected failure)"
+    print("Tampered state root correctly rejected")
+
+    assert not verify_key_proof(flip_first_byte(key), value, True, root, proof), \
+        "verification ACCEPTED a proof for the wrong key (expected failure)"
+    print("Wrong key correctly rejected")
+
+    print("\n--- All tampered faucet proofs were correctly rejected by the verifier! ---")
+
+
 def test_plugin_transactions() -> None:
     """Main test function."""
     print("=== Python Plugin RPC Test ===\n")
@@ -685,17 +831,16 @@ def test_plugin_transactions() -> None:
     # Get account 1's key for signing
     account1_key = keystore_get_key(ADMIN_RPC_URL, account1_addr, TEST_PASSWORD)
     
-    # Step 2: Use faucet to add balance to account 1
+    # Step 2: Use faucet to add balance to account 1. The faucet amount is NOT passed here; it is
+    # taken from the plugin's pluginConfig.faucetAmount, so we assert the minted amount matches it.
     print("\nStep 2: Using faucet to add balance to account 1...")
     
-    faucet_amount = 1000000000  # 1000 tokens
     faucet_fee = 10000
     
     faucet_tx_hash = send_faucet_tx(
         QUERY_RPC_URL,
         account1_key,
         account1_addr,
-        faucet_amount,
         faucet_fee,
         NETWORK_ID,
         CHAIN_ID,
@@ -719,6 +864,13 @@ def test_plugin_transactions() -> None:
     bal1_after_faucet = get_account_balance(QUERY_RPC_URL, account1_addr)
     bal2_after_faucet = get_account_balance(QUERY_RPC_URL, account2_addr)
     print(f"Balances after faucet - Account 1: {bal1_after_faucet}, Account 2: {bal2_after_faucet}")
+
+    # Validate the faucet minted exactly pluginConfig.faucetAmount (account 1 started empty), proving
+    # the amount came from the plugin's config and not from the RPC request.
+    assert bal1_after_faucet == FAUCET_CONFIGURED_AMOUNT, \
+        (f"faucet minted {bal1_after_faucet} to account 1, "
+         f"want pluginConfig.faucetAmount={FAUCET_CONFIGURED_AMOUNT}")
+    print(f"Faucet minted the configured pluginConfig.faucetAmount ({FAUCET_CONFIGURED_AMOUNT}) as expected")
     
     # Step 3: Send tokens from account 1 to account 2
     print("\nStep 3: Sending tokens from account 1 to account 2...")
@@ -812,7 +964,7 @@ def test_plugin_transactions() -> None:
 
 
 if __name__ == "__main__":
-    # optional selector: "transactions", "custom"/"rpc", or "all" (default)
+    # optional selector: "transactions", "custom"/"rpc", "proof", or "all" (default)
     selected = sys.argv[1] if len(sys.argv) > 1 else "all"
     try:
         if selected in ("all", "transactions", "tx"):
@@ -820,6 +972,9 @@ if __name__ == "__main__":
             print()
         if selected in ("all", "custom", "rpc"):
             test_plugin_custom_rpc_endpoints()
+        if selected in ("all", "proof"):
+            print()
+            test_faucet_proof_tamper_detected()
         print("\nTest completed successfully!")
         sys.exit(0)
     except Exception as e:

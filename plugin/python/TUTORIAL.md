@@ -38,13 +38,13 @@ message MessageReward {
 
 // MessageFaucet is a test-only transaction that mints tokens to any address
 // No balance check required - just mints tokens for testing purposes
+// NOTE: there is intentionally NO `amount` field. The minted amount is operator-controlled via
+// config.json `pluginConfig.faucetAmount` (see Step 6b), not supplied per-transaction over RPC.
 message MessageFaucet {
   // signer_address: the address signing this transaction (for auth)
   bytes signer_address = 1; // @gotags: json:"signerAddress"
   // recipient_address: who receives the tokens
   bytes recipient_address = 2; // @gotags: json:"recipientAddress"
-  // amount: tokens to mint
-  uint64 amount = 3;
 }
 ```
 
@@ -142,13 +142,13 @@ def _check_message_faucet(self, msg: MessageFaucet) -> PluginCheckResponse:
     Faucet is a test transaction that mints tokens to any address without balance checks.
     
     Args:
-        msg: The faucet message containing signer_address, recipient_address, and amount
-        
+        msg: The faucet message containing signer_address and recipient_address
+
     Returns:
         PluginCheckResponse with authorized signers set
         
     Raises:
-        PluginError: If any validation fails (invalid address or amount)
+        PluginError: If any validation fails (invalid address)
     """
     # Validate signer address - all Canopy addresses are exactly 20 bytes.
     # This prevents malformed addresses from entering the mempool.
@@ -160,10 +160,8 @@ def _check_message_faucet(self, msg: MessageFaucet) -> PluginCheckResponse:
     if len(msg.recipient_address) != 20:
         raise err_invalid_address()
 
-    # Validate amount - must be greater than zero.
-    # Zero-amount transactions are meaningless and waste block space.
-    if msg.amount == 0:
-        raise err_invalid_amount()
+    # NOTE: there is no amount to validate here — the faucet mints a fixed, operator-controlled
+    # amount (pluginConfig.faucetAmount), which is validated once at startup (see Step 6b).
 
     # Build and return the successful check response:
     # - recipient: who receives funds (used for indexing/notifications)
@@ -259,7 +257,8 @@ async def _deliver_message_faucet(self, msg: MessageFaucet) -> PluginDeliverResp
     Faucet is special: it mints tokens without requiring any existing balance (for testing).
     
     Args:
-        msg: The faucet message containing recipient_address and amount to mint
+        msg: The faucet message containing recipient_address (the minted amount comes from
+            pluginConfig.faucetAmount, not from the message)
         
     Returns:
         PluginDeliverResponse with empty error field on success
@@ -313,7 +312,10 @@ async def _deliver_message_faucet(self, msg: MessageFaucet) -> PluginDeliverResp
     # CORE LOGIC: Add the faucet amount to the recipient's balance.
     # This is where tokens are "minted" - we simply increase the balance.
     # No balance check needed because faucet creates tokens from nothing.
-    recipient_account.amount += msg.amount
+    # The amount is NOT taken from the message; it comes from the operator-controlled
+    # pluginConfig.faucetAmount, decoded + validated once at startup (see Step 6b).
+    faucet_amount = self.plugin.settings.faucet_amount
+    recipient_account.amount += faucet_amount
 
     # Marshal the updated account back to protobuf bytes for storage.
     recipient_bytes_new = marshal(recipient_account)
@@ -540,9 +542,62 @@ result = future.result(timeout=15)
 Each handler then decodes the raw bytes into the plugin's own `Faucet`/`Reward` types:
 
 - Without `?address`, it does a **range read** over the record prefix (`faucet_prefix()` / `reward_prefix()`) and returns every record.
-- With `?address=<hex>`, it does a **single-key read** (`key_for_faucet(addr)` / `key_for_reward(addr)`) and returns just that recipient's record.
+- With `?address=<hex>`, it does a **single-key read with a proof** via the new `query_state_with_proof(height, key)` helper (`key_for_faucet(addr)` / `key_for_reward(addr)`) and returns just that recipient's record together with the data needed to verify it trustlessly (see "Return a verifiable proof" below).
 
 > **Important — the range prefix must be length-prefixed.** Stored keys are length-prefixed (`key_for_faucet(addr)` = `join_len_prefix(FAUCET_PREFIX, addr)`), so the prefix you pass to a **range read** must be length-prefixed too — that's exactly what `faucet_prefix()` returns (`join_len_prefix(FAUCET_PREFIX)`, i.e. `b"\x01\x64"`), **not** the raw byte `b"\x64"`. Passing the raw prefix byte misaligns Canopy's length-prefixed iterator and crashes the node with `panic: corrupt or incomplete key`. (Single-key reads via `key_for_faucet(addr)` are already length-prefixed, so they're unaffected.)
+
+### Return a verifiable proof (recommended)
+
+A plain read answers "what does this node *say* the value is?" — the client has to trust the node. The single-recipient endpoint does better: it returns a **sparse-merkle-tree (SMT) proof** so the client can verify the value **trustlessly**, without trusting the node that served it.
+
+The framework adds `Plugin.query_state_with_proof(height, key)` (`contract/plugin.py`), the proof-carrying sibling of `query_state`. It sends a single-key read with `prove=True` and returns a small object with:
+
+- `value` (bytes) — the record's raw value (empty when the key doesn't exist)
+- `exists` (bool) — whether the key currently holds a non-empty value (membership vs. non-membership proof)
+- `proof` (list of `ProofNode`, each `{key, value, bitmask}`) — the leaf being proven plus the sibling nodes along the path to the root
+- `state_root` (bytes) — the state commitment root the proof commits to, at the resolved height
+- `height` (int) — the concrete committed height the query was resolved at (so `height=0` "latest" still tells the client which root to trust)
+
+The by-address faucet handler calls this helper and shapes a JSON object:
+
+```python
+def _handle_query_faucets(self, query):
+    addr_hex = (query.get("address") or [""])[0]
+    if not addr_hex:
+        # no address → fall back to the existing range-read list endpoint
+        return self._handle_query_faucets_list(query)
+    height = int((query.get("height") or ["0"])[0])  # 0 = latest
+    key = key_for_faucet(hex_to_bytes(addr_hex))
+
+    future = asyncio.run_coroutine_threadsafe(
+        self.plugin.query_state_with_proof(height, key), self.plugin._loop
+    )
+    sp = future.result(timeout=15)  # StateProof
+
+    # `faucet` is a convenience, already-decoded view of `value`; a trustless client should still
+    # verify `value` + `proof` against `stateRoot` itself rather than trust this decoded field.
+    faucet = unmarshal(Faucet, sp.value) if sp.exists else Faucet()
+    self._write_json({
+        "height": sp.height,
+        "stateRoot": sp.state_root.hex(),
+        "key": key.hex(),
+        "exists": sp.exists,
+        "value": sp.value.hex(),
+        "proof": [
+            {"key": n.key.hex(), "value": n.value.hex(), "bitmask": n.bitmask}
+            for n in sp.proof
+        ],
+        "faucet": {
+            "recipientAddress": faucet.recipient_address.hex(),
+            "totalAmount": faucet.total_amount,
+            "count": faucet.count,
+        },
+    })
+```
+
+**How a client verifies trustlessly:** it authenticates `stateRoot` independently — it does **not** take the node's word for it — by checking the quorum certificate for that `height` (the root is signed by the validator set). It then recomputes the root from `value` + `proof` and checks it equals the authenticated `stateRoot`. If they match, the value is provably the committed state; if a node lies about `value` or `proof`, the recomputed root simply won't match and verification **fails** — a dishonest node can only make the check fail, it can never forge a value that verifies. (When `exists` is `false`, the proof is a *non-membership* proof: it proves the key is genuinely absent.)
+
+The `faucet` field is a **convenience view only** — the already-decoded record so callers that trust the node can skip the proof math. A trustless client should ignore it and verify `value` + `proof` against `stateRoot` itself. The **reward** endpoint follows the exact same pattern through its own key builder (`key_for_reward(addr)`), returning a `reward` convenience field alongside the identical `height`/`stateRoot`/`key`/`exists`/`value`/`proof` fields.
 
 The server is already started from `main.py` (no change needed):
 
@@ -562,15 +617,106 @@ After faucet/reward transactions have been included in blocks:
 curl 'http://localhost:50010/v1/query/faucets'
 # {"faucets":[{"recipientAddress":"...","totalAmount":1000000000,"count":1}],"count":1,"height":0}
 
-# a single recipient's faucet record
+# a single recipient's faucet record — now returns a verifiable proof
 curl 'http://localhost:50010/v1/query/faucets?address=<recipient-hex>'
+# {
+#   "height": 42,
+#   "stateRoot": "9f2c…",                       // authenticate this via the quorum certificate
+#   "key": "0164…",                             // the length-prefixed state key that was proven
+#   "exists": true,
+#   "value": "0a14…",                           // raw record bytes the proof commits to
+#   "proof": [                                  // leaf + sibling nodes up to the root
+#     {"key": "…", "value": "…", "bitmask": 0},
+#     {"key": "…", "value": "…", "bitmask": 1}
+#   ],
+#   "faucet": {                                 // convenience view only — verify value+proof instead
+#     "recipientAddress": "<recipient-hex>",
+#     "totalAmount": 1000000000,
+#     "count": 1
+#   }
+# }
 
 # all reward records (optionally at a historical height)
 curl 'http://localhost:50010/v1/query/rewards?height=42'
 
-# a single recipient's reward record
+# a single recipient's reward record — same proof shape, with a `reward` convenience field
 curl 'http://localhost:50010/v1/query/rewards?address=<recipient-hex>'
 ```
+
+## Step 6b: Configure the faucet amount via `pluginConfig`
+
+The faucet amount is **operator-controlled**, not supplied per-transaction. It is read from the
+node's `config.json` `pluginConfig` field, which Canopy forwards verbatim to the plugin during the
+handshake. `pluginConfig` is intentionally typed as *any* JSON on the node side, so each plugin can
+define its own schema and validate it at startup.
+
+### How it flows
+
+1. **Node config** (`~/.canopy/config.json`) carries an opaque `pluginConfig` JSON value:
+
+   ```json
+   {
+     "plugin": "python",
+     "pluginConfig": { "faucetAmount": 1000000000 }
+   }
+   ```
+
+2. **Canopy core** (`lib/config.go` `MainConfig.PluginConfig`) reads it as raw JSON and forwards it
+   to the plugin in the handshake response (`PluginFSMConfig.plugin_config`). Core never inspects it.
+
+3. **The plugin** decodes + validates it at startup. The base SDK (`contract/plugin.py`) defines the
+   expected shape and the single validation entry point:
+
+   ```python
+   @dataclass
+   class Config:
+       chain_id: int = 1
+       data_dir_path: str = "/tmp/plugin/"
+       rpc_address: str = "0.0.0.0:50010"
+       # opaque pluginConfig mirrored from the node config.json (any JSON)
+       plugin_config: Any = None
+
+   @dataclass
+   class PluginSettings:
+       # the typed, validated shape the plugin expects pluginConfig to take
+       faucet_amount: int = 0
+
+   def parse_plugin_config(raw: bytes) -> PluginSettings:
+       """Decode + validate the forwarded JSON at startup; a malformed blob fails the handshake
+       (and the plugin exits), satisfying 'validate it is in the expected form'."""
+       ...
+   ```
+
+   The handshake (the `config` branch of `_handle_fsm_request` in `contract/plugin.py`) calls
+   `parse_plugin_config(msg.config.plugin_config)` and stores the result on `self.settings`, so
+   handlers can read `self.plugin.settings.faucet_amount`. An invalid blob is logged and the plugin
+   process exits (fail fast).
+
+### Require a non-zero faucet amount (tutorial validation)
+
+Because this plugin's faucet is useless without a configured amount, extend `parse_plugin_config` to
+reject a missing/zero `faucetAmount` so the plugin fails fast at startup:
+
+```python
+def parse_plugin_config(raw: bytes) -> PluginSettings:
+    settings = PluginSettings()
+    if not raw:
+        raise err_invalid_plugin_config('missing pluginConfig (expected { "faucetAmount": <uint64> })')
+    try:
+        data = json.loads(raw)
+    except (ValueError, TypeError) as err:
+        raise err_invalid_plugin_config(str(err))
+    if not isinstance(data, dict):
+        raise err_invalid_plugin_config("expected a JSON object")
+    settings.faucet_amount = int(data.get("faucetAmount", 0) or 0)
+    if settings.faucet_amount == 0:
+        raise err_invalid_plugin_config("faucetAmount must be greater than zero")
+    return settings
+```
+
+The tutorial test (`tutorial/rpc_test.py`) asserts the faucet mints exactly this configured amount
+(`FAUCET_CONFIGURED_AMOUNT`), proving the amount comes from `pluginConfig` and not from the RPC
+request.
 
 ## Step 7: Running Canopy with the Plugin
 
@@ -594,11 +740,14 @@ Edit `~/.canopy/config.json` and add or modify the `plugin` field to `"python"`:
 ```json
 {
   "plugin": "python",
+  "pluginConfig": { "faucetAmount": 1000000000 },
   ...
 }
 ```
 
 **Note**: The `plugin` field should be at the top level of the JSON configuration.
+
+**Note**: `pluginConfig` is an opaque (any) JSON value that Canopy forwards to the plugin unchanged. For this tutorial the Python plugin expects `{ "faucetAmount": <uint64> }` and validates it at startup (see Step 6b); the plugin will refuse to start if it is missing or `faucetAmount` is zero.
 
 ### 3. Start Canopy
 

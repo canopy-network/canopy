@@ -83,7 +83,13 @@ message PluginConfig {
 }
 
 // PluginFSMConfig is the identity information of the plugin that is communicated from the fsm to the plugin
-message PluginFSMConfig {PluginConfig config = 1;}
+message PluginFSMConfig {
+  // config: the identity information of the plugin (echoed back from the handshake)
+  PluginConfig config = 1;
+  // plugin_config: the opaque, user-supplied `pluginConfig` field from the node's config.json,
+  // forwarded verbatim (raw JSON bytes) so the plugin can decode + validate it at startup.
+  bytes plugin_config = 2; // @gotags: json:"pluginConfig"
+}
 
 // Core block lifecycle messages
 
@@ -157,6 +163,13 @@ message PluginQueryRequest {
 message PluginQueryResponse {
   // read: the results of the read request
   PluginStateReadResponse read = 1;
+  // state_root: the state commitment root at the (resolved) height, which any included merkle proofs
+  // commit to. A client authenticates this root independently (via the quorum certificate) and then
+  // verifies the proofs against it.
+  bytes state_root = 2; // @gotags: json:"stateRoot"
+  // height: the committed height the query was actually resolved at (0 in the request means 'latest',
+  // and this field reports the concrete height that was used, so the client knows which root to trust)
+  uint64 height = 3;
   // error: if an error occurred during the request execution
   PluginError error = 99;
 }
@@ -177,6 +190,9 @@ message PluginKeyRead {
   uint64 query_id = 1; // @gotags: json:"queryId"
   // key to read from state
   bytes key = 2;
+  // prove: when true, the FSM also returns a sparse-merkle-tree membership/non-membership proof for
+  // this key (only honored on the detached, read-only query path against a committed snapshot)
+  bool prove = 3;
 }
 
 // PluginRangeRead requests an iteration over a key range with optional limits and direction
@@ -205,6 +221,24 @@ message PluginReadResult {
   uint64 query_id = 1; // @gotags: json:"queryId"
   // entries: returned for this query
   repeated PluginStateEntry entries = 2;
+  // proof: the sparse-merkle-tree proof for the requested key, present only when the request set
+  // prove=true. It is a membership proof when the key exists and a non-membership proof otherwise.
+  repeated ProofNode proof = 3;
+  // exists: whether the proven key currently holds a (non-empty) value; distinguishes a membership
+  // proof from a non-membership proof for the client
+  bool exists = 4;
+}
+
+// ProofNode is a single node of a sparse-merkle-tree proof (the leaf being proven, followed by the
+// sibling nodes along the path to the root). It mirrors the node shape used by the state commitment
+// store so a client can reconstruct the root and verify membership or non-membership.
+message ProofNode {
+  // key: the compact key-bit representation of the node
+  bytes key = 1;
+  // value: the node's value hash
+  bytes value = 2;
+  // bitmask: indicates whether the sibling is the left or right child (used during reconstruction)
+  int32 bitmask = 3;
 }
 
 // Plugin State Write Interface

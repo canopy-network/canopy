@@ -67,18 +67,19 @@ func (c Config) PluginHome(plugin string) string {
 // MAIN CONFIG BELOW
 
 type MainConfig struct {
-	LogLevel            string                 `json:"logLevel"`            // any level includes the levels above it: debug < info < warning < error
-	ChainId             uint64                 `json:"chainId"`             // the identifier of this particular chain within a single 'network id'
-	SleepUntil          uint64                 `json:"sleepUntil"`          // allows coordinated 'wake-ups' for genesis or chain halt events
-	RootChain           []RootChain            `json:"rootChain"`           // a list of the root chain(s) a node could connect to as dictated by the governance parameter 'RootChainId'
-	RunVDF              bool                   `json:"runVDF"`              // whether the node should run a Verifiable Delay Function to help secure the network against Long-Range-Attacks
-	Headless            bool                   `json:"headless"`            // turn off the web wallet and block explorer 'web' front ends
-	AutoUpdate          bool                   `json:"autoUpdate"`          // check for new versions of software each X time
-	AutoUpdateRepoOwner string                 `json:"autoUpdateRepoOwner"` // GitHub repo owner for core auto-updates (e.g., "canopy-network")
-	AutoUpdateRepoName  string                 `json:"autoUpdateRepoName"`  // GitHub repo name for core auto-updates (e.g., "canopy")
-	Plugin              string                 `json:"plugin"`              // the configured plugin to use
-	PluginTimeoutMS     int                    `json:"pluginTimeoutMS"`     // plugin request timeout in milliseconds
-	PluginAutoUpdate    PluginAutoUpdateConfig `json:"pluginAutoUpdate"`    // plugin auto-update configuration
+	LogLevel            string                 `json:"logLevel"`               // any level includes the levels above it: debug < info < warning < error
+	ChainId             uint64                 `json:"chainId"`                // the identifier of this particular chain within a single 'network id'
+	SleepUntil          uint64                 `json:"sleepUntil"`             // allows coordinated 'wake-ups' for genesis or chain halt events
+	RootChain           []RootChain            `json:"rootChain"`              // a list of the root chain(s) a node could connect to as dictated by the governance parameter 'RootChainId'
+	RunVDF              bool                   `json:"runVDF"`                 // whether the node should run a Verifiable Delay Function to help secure the network against Long-Range-Attacks
+	Headless            bool                   `json:"headless"`               // turn off the web wallet and block explorer 'web' front ends
+	AutoUpdate          bool                   `json:"autoUpdate"`             // check for new versions of software each X time
+	AutoUpdateRepoOwner string                 `json:"autoUpdateRepoOwner"`    // GitHub repo owner for core auto-updates (e.g., "canopy-network")
+	AutoUpdateRepoName  string                 `json:"autoUpdateRepoName"`     // GitHub repo name for core auto-updates (e.g., "canopy")
+	Plugin              string                 `json:"plugin"`                 // the configured plugin to use
+	PluginConfig        json.RawMessage        `json:"pluginConfig,omitempty"` // opaque, plugin-defined configuration (any JSON) forwarded verbatim to the plugin at handshake; Canopy core never inspects it
+	PluginTimeoutMS     int                    `json:"pluginTimeoutMS"`        // plugin request timeout in milliseconds
+	PluginAutoUpdate    PluginAutoUpdateConfig `json:"pluginAutoUpdate"`       // plugin auto-update configuration
 }
 
 // PluginAutoUpdateConfig holds configuration for plugin auto-updates

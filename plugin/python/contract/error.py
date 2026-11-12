@@ -74,3 +74,7 @@ def err_invalid_amount() -> PluginError:
 
 def err_tx_fee_below_state_limit() -> PluginError:
     return PluginError(14, DEFAULT_MODULE, "tx.fee is below state limit")
+
+
+def err_invalid_plugin_config(reason: str) -> PluginError:
+    return PluginError(15, DEFAULT_MODULE, f"pluginConfig is not in the expected form: {reason}")

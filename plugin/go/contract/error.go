@@ -74,3 +74,7 @@ func ErrInvalidAmount() *PluginError {
 func ErrTxFeeBelowStateLimit() *PluginError {
 	return NewError(14, DefaultModule, "tx.fee is below state limit")
 }
+
+func ErrInvalidPluginConfig(reason string) *PluginError {
+	return NewError(15, DefaultModule, fmt.Sprintf("pluginConfig is not in the expected form: %s", reason))
+}

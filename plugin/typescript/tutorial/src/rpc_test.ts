@@ -13,6 +13,10 @@
 import { randomBytes } from 'crypto';
 import { bls12_381 } from '@noble/curves/bls12-381.js';
 
+// Self-contained, dependency-free client-side SMT proof verifier (see verify.ts). Used by the
+// 'faucet proof tamper detected' test to prove the merkle proofs actually work.
+import { verifyKeyProof, type ProofNode } from './verify.js';
+
 // Import protobuf types
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore - importing CommonJS module
@@ -26,6 +30,12 @@ const ADMIN_RPC_URL = 'http://localhost:50003'; // Admin endpoints (keystore man
 const NETWORK_ID = 1n;
 const CHAIN_ID = 1n;
 const TEST_PASSWORD = 'testpassword123';
+
+// faucetConfiguredAmount is the fixed amount (uCNPY) the plugin mints per faucet transaction. The
+// faucet amount is NO LONGER supplied over RPC; it is operator-controlled via config.json
+// `pluginConfig.faucetAmount` (forwarded to the plugin at handshake — see TUTORIAL.md). Keep this
+// constant in sync with the `faucetAmount` configured in the node's config.json for these tests.
+const faucetConfiguredAmount = 1000000000n; // 1000 tokens
 
 // Key group holds key information from the keystore
 interface KeyGroup {
@@ -264,12 +274,13 @@ async function buildSignAndSendTx(
             break;
         }
         case 'faucet': {
+            // NOTE: the faucet message carries no amount — the minted amount is operator-controlled
+            // via pluginConfig.faucetAmount, not supplied over RPC.
             const signerAddr = hexToBytes(msgJSON['signerAddress'] as string);
             const recipientAddr = hexToBytes(msgJSON['recipientAddress'] as string);
             const msg = types.MessageFaucet.create({
                 signerAddress: signerAddr,
-                recipientAddress: recipientAddr,
-                amount: msgJSON['amount'] as number
+                recipientAddress: recipientAddr
             });
             msgProto = types.MessageFaucet.encode(msg).finish();
             break;
@@ -318,12 +329,12 @@ async function buildSignAndSendTx(
     return JSON.parse(respBody) as string;
 }
 
-// Send a faucet transaction
+// Send a faucet transaction. Note there is no amount parameter: the minted amount comes from the
+// plugin's pluginConfig.faucetAmount, not from the caller/RPC.
 async function sendFaucetTx(
     rpcURL: string,
     signerKey: KeyGroup,
     recipientAddr: string,
-    amount: bigint,
     fee: bigint,
     networkId: bigint,
     chainId: bigint,
@@ -331,8 +342,7 @@ async function sendFaucetTx(
 ): Promise<string> {
     const faucetMsg = {
         signerAddress: signerKey.address,
-        recipientAddress: recipientAddr,
-        amount: Number(amount)
+        recipientAddress: recipientAddr
     };
 
     return buildSignAndSendTx(
@@ -427,17 +437,16 @@ async function testPluginTransactions(): Promise<void> {
     // Get account 1's key for signing
     const account1Key = await keystoreGetKey(ADMIN_RPC_URL, account1Addr, TEST_PASSWORD);
 
-    // Step 2: Use faucet to add balance to account 1
+    // Step 2: Use faucet to add balance to account 1. The faucet amount is NOT passed here; it is
+    // taken from the plugin's pluginConfig.faucetAmount, so we assert the minted amount matches it.
     console.log('\nStep 2: Using faucet to add balance to account 1...');
 
-    const faucetAmount = 1000000000n; // 1000 tokens
     const faucetFee = 10000n;
 
     const faucetTxHash = await sendFaucetTx(
         QUERY_RPC_URL,
         account1Key,
         account1Addr,
-        faucetAmount,
         faucetFee,
         NETWORK_ID,
         CHAIN_ID,
@@ -472,6 +481,17 @@ async function testPluginTransactions(): Promise<void> {
     const bal2AfterFaucet = await getAccountBalance(QUERY_RPC_URL, account2Addr);
     console.log(
         `Balances after faucet - Account 1: ${bal1AfterFaucet}, Account 2: ${bal2AfterFaucet}`
+    );
+
+    // Validate the faucet minted exactly pluginConfig.faucetAmount (account 1 started empty), proving
+    // the amount came from the plugin's config and not from the RPC request.
+    if (bal1AfterFaucet !== faucetConfiguredAmount) {
+        throw new Error(
+            `faucet minted ${bal1AfterFaucet} to account 1, want pluginConfig.faucetAmount=${faucetConfiguredAmount}`
+        );
+    }
+    console.log(
+        `Faucet minted the configured pluginConfig.faucetAmount (${faucetConfiguredAmount}) as expected`
     );
 
     // Step 3: Send tokens from account 1 to account 2
@@ -602,6 +622,27 @@ interface FaucetRecord {
     count: bigint;
 }
 
+// proofNode mirrors a single Sparse-Merkle-Tree node returned in a verifiable proof
+interface ProofNodeJSON {
+    key: string;
+    value: string;
+    bitmask: number;
+}
+
+// faucetProof mirrors the verifiable single-record response returned by
+// GET /v1/query/faucets?address=<hex>: the decoded `faucet` convenience view plus the SMT proof
+// and the committed state root / height required to verify it.
+interface FaucetProof extends FaucetRecord {
+    stateRoot: string;
+    height: bigint;
+    // key / value are the RAW (hex) state key and committed value the proof commits to; the verifier
+    // recomputes the leaf from the raw key and checks the value against the committed leaf.
+    key: string;
+    value: string;
+    exists: boolean;
+    proof: ProofNodeJSON[];
+}
+
 // rewardRecord mirrors the JSON shape returned by the plugin's /v1/query/rewards endpoint
 interface RewardRecord {
     recipientAddress: string;
@@ -618,17 +659,39 @@ function toBigInt(v: number | string | undefined | null): bigint {
     return BigInt(v);
 }
 
-// queryFaucetRecord fetches a single recipient's faucet record from the plugin RPC server
-async function queryFaucetRecord(pluginURL: string, address: string): Promise<FaucetRecord> {
+// queryFaucetRecord fetches a single recipient's faucet record (with its verifiable proof) from the
+// plugin RPC server. The response now carries the committed state root / height, an `exists` flag and
+// the SMT `proof`, alongside the decoded `faucet` convenience view.
+async function queryFaucetRecord(pluginURL: string, address: string): Promise<FaucetProof> {
     const respBody = await getRawJSON(`${pluginURL}/v1/query/faucets?address=${address}`);
     const parsed = JSON.parse(respBody) as {
-        faucet?: { recipientAddress?: string; totalAmount?: number | string; count?: number | string };
+        height?: number | string;
+        stateRoot?: string;
+        key?: string;
+        value?: string;
+        exists?: boolean;
+        proof?: Array<{ key?: string; value?: string; bitmask?: number }>;
+        faucet?: {
+            recipientAddress?: string;
+            totalAmount?: number | string;
+            count?: number | string;
+        } | null;
     };
     const faucet = parsed.faucet || {};
     return {
         recipientAddress: faucet.recipientAddress || '',
         totalAmount: toBigInt(faucet.totalAmount),
-        count: toBigInt(faucet.count)
+        count: toBigInt(faucet.count),
+        stateRoot: parsed.stateRoot || '',
+        height: toBigInt(parsed.height),
+        key: parsed.key || '',
+        value: parsed.value || '',
+        exists: parsed.exists ?? false,
+        proof: (parsed.proof || []).map((n) => ({
+            key: n.key || '',
+            value: n.value || '',
+            bitmask: n.bitmask ?? 0
+        }))
     };
 }
 
@@ -690,7 +753,7 @@ async function pollFaucetRecordUntil(
     address: string,
     minCount: bigint,
     timeoutMs: number
-): Promise<FaucetRecord> {
+): Promise<FaucetProof> {
     const deadline = Date.now() + timeoutMs;
     let lastErr: Error | null = null;
     while (Date.now() < deadline) {
@@ -715,7 +778,7 @@ async function pollFaucetRecord(
     pluginURL: string,
     address: string,
     timeoutMs: number
-): Promise<FaucetRecord> {
+): Promise<FaucetProof> {
     return pollFaucetRecordUntil(pluginURL, address, 1n, timeoutMs);
 }
 
@@ -815,18 +878,18 @@ async function testPluginCustomRPCEndpoints(): Promise<void> {
 
     const fee = 10000n;
 
-    // Step 2: Faucet the recipient twice and verify the aggregated faucet record
-    const faucetAmount1 = 700000000n;
-    const faucetAmount2 = 300000000n;
-
-    console.log(`Step 2: Sending first faucet to recipient (amount=${faucetAmount1}, fee=${fee})...`);
+    // Step 2: Faucet the recipient twice and verify the aggregated faucet record. Each faucet mints
+    // the fixed pluginConfig.faucetAmount (not an RPC-supplied amount), so the record should
+    // aggregate in multiples of that configured amount.
+    console.log(
+        `Step 2: Sending first faucet to recipient (amount from pluginConfig=${faucetConfiguredAmount}, fee=${fee})...`
+    );
     let height = await getHeight(QUERY_RPC_URL);
     console.log(`Current height: ${height}`);
     let txHash = await sendFaucetTx(
         QUERY_RPC_URL,
         recipientKey,
         recipientAddr,
-        faucetAmount1,
         fee,
         NETWORK_ID,
         CHAIN_ID,
@@ -840,7 +903,7 @@ async function testPluginCustomRPCEndpoints(): Promise<void> {
     }
     console.log('First faucet transaction confirmed!');
 
-    // after the first faucet, the record should exist with count=1 and totalAmount=faucetAmount1
+    // after the first faucet, the record should exist with count=1 and totalAmount=faucetConfiguredAmount
     console.log(`Querying plugin endpoint GET /v1/query/faucets?address=${recipientAddr} ...`);
     let faucet = await pollFaucetRecord(PLUGIN_RPC_URL, recipientAddr, recordTimeout);
     console.log(
@@ -849,24 +912,41 @@ async function testPluginCustomRPCEndpoints(): Promise<void> {
     if (faucet.count !== 1n) {
         throw new Error(`faucet count after first faucet = ${faucet.count}, want 1`);
     }
-    if (faucet.totalAmount !== faucetAmount1) {
+    if (faucet.totalAmount !== faucetConfiguredAmount) {
         throw new Error(
-            `faucet totalAmount after first faucet = ${faucet.totalAmount}, want ${faucetAmount1}`
+            `faucet totalAmount after first faucet = ${faucet.totalAmount}, want pluginConfig.faucetAmount=${faucetConfiguredAmount}`
         );
     }
     if (faucet.recipientAddress.toLowerCase() !== recipientAddr.toLowerCase()) {
         throw new Error(`faucet recipientAddress = ${faucet.recipientAddress}, want ${recipientAddr}`);
     }
-    console.log('Faucet record verified after first faucet (count=1)');
+    // the by-address endpoint must return a verifiable proof: a non-empty committed state root, a
+    // committed height > 0, a non-empty SMT proof, and exists === true for a record that exists.
+    if (!faucet.exists) {
+        throw new Error('faucet by-address response exists = false, want true');
+    }
+    if (faucet.stateRoot.length === 0) {
+        throw new Error('faucet by-address response has an empty stateRoot, want non-empty');
+    }
+    if (faucet.height <= 0n) {
+        throw new Error(`faucet by-address response height = ${faucet.height}, want > 0`);
+    }
+    if (faucet.proof.length === 0) {
+        throw new Error('faucet by-address response has an empty proof, want non-empty');
+    }
+    console.log(
+        `Faucet record verified after first faucet (count=1, exists=true, height=${faucet.height}, proof nodes=${faucet.proof.length})`
+    );
 
-    console.log(`Sending second faucet to recipient (amount=${faucetAmount2}, fee=${fee})...`);
+    console.log(
+        `Sending second faucet to recipient (amount from pluginConfig=${faucetConfiguredAmount}, fee=${fee})...`
+    );
     height = await getHeight(QUERY_RPC_URL);
     console.log(`Current height: ${height}`);
     txHash = await sendFaucetTx(
         QUERY_RPC_URL,
         recipientKey,
         recipientAddr,
-        faucetAmount2,
         fee,
         NETWORK_ID,
         CHAIN_ID,
@@ -880,8 +960,8 @@ async function testPluginCustomRPCEndpoints(): Promise<void> {
     }
     console.log('Second faucet transaction confirmed!');
 
-    // after the second faucet, count should be 2 and totalAmount the sum of both
-    const wantTotal = faucetAmount1 + faucetAmount2;
+    // after the second faucet, count should be 2 and totalAmount twice the configured faucet amount
+    const wantTotal = 2n * faucetConfiguredAmount;
     console.log('Waiting for faucet record to reflect the second faucet (count=2)...');
     faucet = await pollFaucetRecordUntil(PLUGIN_RPC_URL, recipientAddr, 2n, recordTimeout);
     console.log(
@@ -935,7 +1015,6 @@ async function testPluginCustomRPCEndpoints(): Promise<void> {
         QUERY_RPC_URL,
         adminKey,
         adminAddr,
-        100000000n,
         fee,
         NETWORK_ID,
         CHAIN_ID,
@@ -1063,9 +1142,140 @@ async function testPluginCustomRPCEndpoints(): Promise<void> {
     console.log(`  curl '${PLUGIN_RPC_URL}/v1/query/rewards'`);
 }
 
+// toVerifyProof converts the JSON proof envelope (hex strings) into the verifier's ProofNode slice.
+function toVerifyProof(nodes: ProofNodeJSON[]): ProofNode[] {
+    return nodes.map((n) => ({
+        key: hexToBytes(n.key),
+        value: hexToBytes(n.value),
+        bitmask: n.bitmask
+    }));
+}
+
+// flipFirstByte returns a copy of b with its first byte flipped (or a single byte if empty), so the
+// result is guaranteed to differ from the original. Used to tamper proof inputs.
+function flipFirstByte(b: Uint8Array): Uint8Array {
+    if (b.length === 0) {
+        return new Uint8Array([0xff]);
+    }
+    const out = new Uint8Array(b);
+    out[0] ^= 0xff;
+    return out;
+}
+
+// cloneProof returns a deep copy of a proof slice so a test can tamper one node in isolation.
+function cloneProof(input: ProofNode[]): ProofNode[] {
+    return input.map((n) => ({
+        key: new Uint8Array(n.key),
+        value: new Uint8Array(n.value),
+        bitmask: n.bitmask
+    }));
+}
+
+// testFaucetProofTamperDetected proves the merkle proof actually does its job. It funds a recipient so
+// a real membership proof exists, fetches the honest proof from the plugin RPC endpoint and confirms
+// it VERIFIES against the returned state root, then tampers each input (the value, a proof node, the
+// root, and the key) and asserts verification now FAILS. A client that trusts the node blindly could
+// be lied to; a client that verifies the proof cannot.
+//
+// NOTE: like the other tutorial tests this is a live integration test. It verifies against the root
+// the node returned; a production client authenticates that root independently via the quorum
+// certificate before trusting it (see verify.ts docs).
+async function testFaucetProofTamperDetected(): Promise<void> {
+    console.log('\n=== TypeScript Faucet Proof Tamper Detection Test ===\n');
+
+    const txTimeout = 120000; // 120s
+    const recordTimeout = 60000; // 60s
+
+    // Skip early with a helpful message if the plugin RPC server isn't reachable
+    console.log(`Checking plugin RPC server reachability at ${PLUGIN_RPC_URL} ...`);
+    try {
+        await getRawJSON(`${PLUGIN_RPC_URL}/v1/query/faucets`);
+    } catch (err) {
+        throw new SkipError(
+            `plugin RPC server not reachable at ${PLUGIN_RPC_URL} (is Canopy running with the typescript plugin and port 50010 exposed?): ${(err as Error).message}`
+        );
+    }
+    console.log('Plugin RPC server is reachable');
+
+    // Fund a fresh recipient so a membership proof exists for its faucet record
+    const suffix = randomSuffix();
+    const recipientAddr = await keystoreNewKey(ADMIN_RPC_URL, `test_proof_${suffix}`, TEST_PASSWORD);
+    console.log(`Created recipient account: ${recipientAddr}`);
+    const recipientKey = await keystoreGetKey(ADMIN_RPC_URL, recipientAddr, TEST_PASSWORD);
+
+    const height = await getHeight(QUERY_RPC_URL);
+    console.log(`Current height: ${height}`);
+    const txHash = await sendFaucetTx(
+        QUERY_RPC_URL,
+        recipientKey,
+        recipientAddr,
+        10000n,
+        NETWORK_ID,
+        CHAIN_ID,
+        height
+    );
+    console.log(`Faucet transaction sent: ${txHash}`);
+
+    console.log('Waiting for faucet transaction to be confirmed...');
+    if (!(await waitForTxInclusion(QUERY_RPC_URL, recipientAddr, txHash, txTimeout))) {
+        throw new Error('Faucet transaction not included within timeout');
+    }
+    console.log('Faucet transaction confirmed!');
+
+    // Wait for the plugin RPC record to reflect committed state
+    await pollFaucetRecord(PLUGIN_RPC_URL, recipientAddr, recordTimeout);
+
+    // Fetch the honest proof envelope
+    const env = await queryFaucetRecord(PLUGIN_RPC_URL, recipientAddr);
+    if (!env.exists || env.proof.length === 0) {
+        throw new Error(
+            `expected a membership proof; got exists=${env.exists} proofNodes=${env.proof.length}`
+        );
+    }
+    const key = hexToBytes(env.key);
+    const value = hexToBytes(env.value);
+    const root = hexToBytes(env.stateRoot);
+    const proof = toVerifyProof(env.proof);
+
+    // Positive control: the honest proof MUST verify against the returned state root
+    if (!verifyKeyProof(key, value, true, root, proof)) {
+        throw new Error('honest faucet proof failed to verify');
+    }
+    console.log(
+        `honest faucet proof verified (${proof.length} node(s)) against the state root`
+    );
+
+    // Negative cases: each tampered input MUST be rejected (returns false)
+    if (verifyKeyProof(key, flipFirstByte(value), true, root, proof)) {
+        throw new Error('verification ACCEPTED a tampered value (expected failure)');
+    }
+    console.log('tampered value correctly rejected');
+
+    const badProof = cloneProof(proof);
+    badProof[0].value = flipFirstByte(badProof[0].value);
+    if (verifyKeyProof(key, value, true, root, badProof)) {
+        throw new Error('verification ACCEPTED a tampered proof node (expected failure)');
+    }
+    console.log('tampered proof node correctly rejected');
+
+    if (verifyKeyProof(key, value, true, flipFirstByte(root), proof)) {
+        throw new Error('verification ACCEPTED a tampered state root (expected failure)');
+    }
+    console.log('tampered state root correctly rejected');
+
+    // wrong key: claim membership for a different (unfunded) address
+    if (verifyKeyProof(flipFirstByte(key), value, true, root, proof)) {
+        throw new Error('verification ACCEPTED a proof for the wrong key (expected failure)');
+    }
+    console.log('wrong key correctly rejected');
+
+    console.log('');
+    console.log('all tampered faucet proofs were correctly rejected by the verifier');
+}
+
 // Run the tests sequentially
 async function main(): Promise<void> {
-    // optional selector: "transactions", "custom"/"rpc", or "all" (default)
+    // optional selector: "transactions", "custom"/"rpc", "proof", or "all" (default)
     const selected = process.argv[2] ?? 'all';
     if (selected === 'all' || selected === 'transactions' || selected === 'tx') {
         await testPluginTransactions();
@@ -1076,6 +1286,17 @@ async function main(): Promise<void> {
         } catch (err) {
             if (err instanceof SkipError) {
                 console.log(`\nSKIP custom RPC endpoints test: ${err.message}`);
+                return;
+            }
+            throw err;
+        }
+    }
+    if (selected === 'all' || selected === 'proof') {
+        try {
+            await testFaucetProofTamperDetected();
+        } catch (err) {
+            if (err instanceof SkipError) {
+                console.log(`\nSKIP faucet proof tamper detected test: ${err.message}`);
                 return;
             }
             throw err;

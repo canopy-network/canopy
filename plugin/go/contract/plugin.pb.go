@@ -581,8 +581,12 @@ func (x *PluginConfig) GetCustomStatePrefixes() [][]byte {
 
 // PluginFSMConfig is the identity information of the plugin that is communicated from the fsm to the plugin
 type PluginFSMConfig struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Config        *PluginConfig          `protobuf:"bytes,1,opt,name=config,proto3" json:"config,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// config: the identity information of the plugin (echoed back from the handshake)
+	Config *PluginConfig `protobuf:"bytes,1,opt,name=config,proto3" json:"config,omitempty"`
+	// plugin_config: the opaque, user-supplied `pluginConfig` field from the node's config.json,
+	// forwarded verbatim (raw JSON bytes) so the plugin can decode + validate it at startup.
+	PluginConfig  []byte `protobuf:"bytes,2,opt,name=plugin_config,json=pluginConfig,proto3" json:"pluginConfig"` // @gotags: json:"pluginConfig"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -620,6 +624,13 @@ func (*PluginFSMConfig) Descriptor() ([]byte, []int) {
 func (x *PluginFSMConfig) GetConfig() *PluginConfig {
 	if x != nil {
 		return x.Config
+	}
+	return nil
+}
+
+func (x *PluginFSMConfig) GetPluginConfig() []byte {
+	if x != nil {
+		return x.PluginConfig
 	}
 	return nil
 }
@@ -1262,6 +1273,13 @@ type PluginQueryResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// read: the results of the read request
 	Read *PluginStateReadResponse `protobuf:"bytes,1,opt,name=read,proto3" json:"read,omitempty"`
+	// state_root: the state commitment root at the (resolved) height, which any included merkle proofs
+	// commit to. A client authenticates this root independently (via the quorum certificate) and then
+	// verifies the proofs against it.
+	StateRoot []byte `protobuf:"bytes,2,opt,name=state_root,json=stateRoot,proto3" json:"stateRoot"` // @gotags: json:"stateRoot"
+	// height: the committed height the query was actually resolved at (0 in the request means 'latest',
+	// and this field reports the concrete height that was used, so the client knows which root to trust)
+	Height uint64 `protobuf:"varint,3,opt,name=height,proto3" json:"height,omitempty"`
 	// error: if an error occurred during the request execution
 	Error         *PluginError `protobuf:"bytes,99,opt,name=error,proto3" json:"error,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -1303,6 +1321,20 @@ func (x *PluginQueryResponse) GetRead() *PluginStateReadResponse {
 		return x.Read
 	}
 	return nil
+}
+
+func (x *PluginQueryResponse) GetStateRoot() []byte {
+	if x != nil {
+		return x.StateRoot
+	}
+	return nil
+}
+
+func (x *PluginQueryResponse) GetHeight() uint64 {
+	if x != nil {
+		return x.Height
+	}
+	return 0
 }
 
 func (x *PluginQueryResponse) GetError() *PluginError {
@@ -1373,7 +1405,10 @@ type PluginKeyRead struct {
 	// query_id to correlate requests and responses
 	QueryId uint64 `protobuf:"varint,1,opt,name=query_id,json=queryId,proto3" json:"queryId"` // @gotags: json:"queryId"
 	// key to read from state
-	Key           []byte `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
+	Key []byte `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
+	// prove: when true, the FSM also returns a sparse-merkle-tree membership/non-membership proof for
+	// this key (only honored on the detached, read-only query path against a committed snapshot)
+	Prove         bool `protobuf:"varint,3,opt,name=prove,proto3" json:"prove,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1420,6 +1455,13 @@ func (x *PluginKeyRead) GetKey() []byte {
 		return x.Key
 	}
 	return nil
+}
+
+func (x *PluginKeyRead) GetProve() bool {
+	if x != nil {
+		return x.Prove
+	}
+	return false
 }
 
 // PluginRangeRead requests an iteration over a key range with optional limits and direction
@@ -1556,7 +1598,13 @@ type PluginReadResult struct {
 	// query_id: matching the original read request
 	QueryId uint64 `protobuf:"varint,1,opt,name=query_id,json=queryId,proto3" json:"queryId"` // @gotags: json:"queryId"
 	// entries: returned for this query
-	Entries       []*PluginStateEntry `protobuf:"bytes,2,rep,name=entries,proto3" json:"entries,omitempty"`
+	Entries []*PluginStateEntry `protobuf:"bytes,2,rep,name=entries,proto3" json:"entries,omitempty"`
+	// proof: the sparse-merkle-tree proof for the requested key, present only when the request set
+	// prove=true. It is a membership proof when the key exists and a non-membership proof otherwise.
+	Proof []*ProofNode `protobuf:"bytes,3,rep,name=proof,proto3" json:"proof,omitempty"`
+	// exists: whether the proven key currently holds a (non-empty) value; distinguishes a membership
+	// proof from a non-membership proof for the client
+	Exists        bool `protobuf:"varint,4,opt,name=exists,proto3" json:"exists,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1605,6 +1653,86 @@ func (x *PluginReadResult) GetEntries() []*PluginStateEntry {
 	return nil
 }
 
+func (x *PluginReadResult) GetProof() []*ProofNode {
+	if x != nil {
+		return x.Proof
+	}
+	return nil
+}
+
+func (x *PluginReadResult) GetExists() bool {
+	if x != nil {
+		return x.Exists
+	}
+	return false
+}
+
+// ProofNode is a single node of a sparse-merkle-tree proof (the leaf being proven, followed by the
+// sibling nodes along the path to the root). It mirrors the node shape used by the state commitment
+// store so a client can reconstruct the root and verify membership or non-membership.
+type ProofNode struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// key: the compact key-bit representation of the node
+	Key []byte `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	// value: the node's value hash
+	Value []byte `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	// bitmask: indicates whether the sibling is the left or right child (used during reconstruction)
+	Bitmask       int32 `protobuf:"varint,3,opt,name=bitmask,proto3" json:"bitmask,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProofNode) Reset() {
+	*x = ProofNode{}
+	mi := &file_plugin_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProofNode) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProofNode) ProtoMessage() {}
+
+func (x *ProofNode) ProtoReflect() protoreflect.Message {
+	mi := &file_plugin_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProofNode.ProtoReflect.Descriptor instead.
+func (*ProofNode) Descriptor() ([]byte, []int) {
+	return file_plugin_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *ProofNode) GetKey() []byte {
+	if x != nil {
+		return x.Key
+	}
+	return nil
+}
+
+func (x *ProofNode) GetValue() []byte {
+	if x != nil {
+		return x.Value
+	}
+	return nil
+}
+
+func (x *ProofNode) GetBitmask() int32 {
+	if x != nil {
+		return x.Bitmask
+	}
+	return 0
+}
+
 // PluginStateWriteRequest batches multiple set and delete operations in one call
 type PluginStateWriteRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -1618,7 +1746,7 @@ type PluginStateWriteRequest struct {
 
 func (x *PluginStateWriteRequest) Reset() {
 	*x = PluginStateWriteRequest{}
-	mi := &file_plugin_proto_msgTypes[22]
+	mi := &file_plugin_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1630,7 +1758,7 @@ func (x *PluginStateWriteRequest) String() string {
 func (*PluginStateWriteRequest) ProtoMessage() {}
 
 func (x *PluginStateWriteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[22]
+	mi := &file_plugin_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1643,7 +1771,7 @@ func (x *PluginStateWriteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PluginStateWriteRequest.ProtoReflect.Descriptor instead.
 func (*PluginStateWriteRequest) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{22}
+	return file_plugin_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *PluginStateWriteRequest) GetSets() []*PluginSetOp {
@@ -1671,7 +1799,7 @@ type PluginStateWriteResponse struct {
 
 func (x *PluginStateWriteResponse) Reset() {
 	*x = PluginStateWriteResponse{}
-	mi := &file_plugin_proto_msgTypes[23]
+	mi := &file_plugin_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1683,7 +1811,7 @@ func (x *PluginStateWriteResponse) String() string {
 func (*PluginStateWriteResponse) ProtoMessage() {}
 
 func (x *PluginStateWriteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[23]
+	mi := &file_plugin_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1696,7 +1824,7 @@ func (x *PluginStateWriteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PluginStateWriteResponse.ProtoReflect.Descriptor instead.
 func (*PluginStateWriteResponse) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{23}
+	return file_plugin_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *PluginStateWriteResponse) GetError() *PluginError {
@@ -1719,7 +1847,7 @@ type PluginSetOp struct {
 
 func (x *PluginSetOp) Reset() {
 	*x = PluginSetOp{}
-	mi := &file_plugin_proto_msgTypes[24]
+	mi := &file_plugin_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1731,7 +1859,7 @@ func (x *PluginSetOp) String() string {
 func (*PluginSetOp) ProtoMessage() {}
 
 func (x *PluginSetOp) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[24]
+	mi := &file_plugin_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1744,7 +1872,7 @@ func (x *PluginSetOp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PluginSetOp.ProtoReflect.Descriptor instead.
 func (*PluginSetOp) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{24}
+	return file_plugin_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *PluginSetOp) GetKey() []byte {
@@ -1772,7 +1900,7 @@ type PluginDeleteOp struct {
 
 func (x *PluginDeleteOp) Reset() {
 	*x = PluginDeleteOp{}
-	mi := &file_plugin_proto_msgTypes[25]
+	mi := &file_plugin_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1784,7 +1912,7 @@ func (x *PluginDeleteOp) String() string {
 func (*PluginDeleteOp) ProtoMessage() {}
 
 func (x *PluginDeleteOp) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[25]
+	mi := &file_plugin_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1797,7 +1925,7 @@ func (x *PluginDeleteOp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PluginDeleteOp.ProtoReflect.Descriptor instead.
 func (*PluginDeleteOp) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{25}
+	return file_plugin_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *PluginDeleteOp) GetKey() []byte {
@@ -1820,7 +1948,7 @@ type PluginStateEntry struct {
 
 func (x *PluginStateEntry) Reset() {
 	*x = PluginStateEntry{}
-	mi := &file_plugin_proto_msgTypes[26]
+	mi := &file_plugin_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1832,7 +1960,7 @@ func (x *PluginStateEntry) String() string {
 func (*PluginStateEntry) ProtoMessage() {}
 
 func (x *PluginStateEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[26]
+	mi := &file_plugin_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1845,7 +1973,7 @@ func (x *PluginStateEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PluginStateEntry.ProtoReflect.Descriptor instead.
 func (*PluginStateEntry) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{26}
+	return file_plugin_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *PluginStateEntry) GetKey() []byte {
@@ -1906,9 +2034,10 @@ const file_plugin_proto_rawDesc = "" +
 	"\x16file_descriptor_protos\x18\x05 \x03(\fR\x14fileDescriptorProtos\x122\n" +
 	"\x15transaction_type_urls\x18\x06 \x03(\tR\x13transactionTypeUrls\x12&\n" +
 	"\x0fevent_type_urls\x18\a \x03(\tR\reventTypeUrls\x122\n" +
-	"\x15custom_state_prefixes\x18\b \x03(\fR\x13customStatePrefixes\">\n" +
+	"\x15custom_state_prefixes\x18\b \x03(\fR\x13customStatePrefixes\"c\n" +
 	"\x0fPluginFSMConfig\x12+\n" +
-	"\x06config\x18\x01 \x01(\v2\x13.types.PluginConfigR\x06config\"9\n" +
+	"\x06config\x18\x01 \x01(\v2\x13.types.PluginConfigR\x06config\x12#\n" +
+	"\rplugin_config\x18\x02 \x01(\fR\fpluginConfig\"9\n" +
 	"\x14PluginGenesisRequest\x12!\n" +
 	"\fgenesis_json\x18\x01 \x01(\fR\vgenesisJson\"A\n" +
 	"\x15PluginGenesisResponse\x12(\n" +
@@ -1943,16 +2072,20 @@ const file_plugin_proto_rawDesc = "" +
 	"\x03msg\x18\x03 \x01(\tR\x03msg\"_\n" +
 	"\x12PluginQueryRequest\x12\x16\n" +
 	"\x06height\x18\x01 \x01(\x04R\x06height\x121\n" +
-	"\x04read\x18\x02 \x01(\v2\x1d.types.PluginStateReadRequestR\x04read\"s\n" +
+	"\x04read\x18\x02 \x01(\v2\x1d.types.PluginStateReadRequestR\x04read\"\xaa\x01\n" +
 	"\x13PluginQueryResponse\x122\n" +
-	"\x04read\x18\x01 \x01(\v2\x1e.types.PluginStateReadResponseR\x04read\x12(\n" +
+	"\x04read\x18\x01 \x01(\v2\x1e.types.PluginStateReadResponseR\x04read\x12\x1d\n" +
+	"\n" +
+	"state_root\x18\x02 \x01(\fR\tstateRoot\x12\x16\n" +
+	"\x06height\x18\x03 \x01(\x04R\x06height\x12(\n" +
 	"\x05error\x18c \x01(\v2\x12.types.PluginErrorR\x05error\"r\n" +
 	"\x16PluginStateReadRequest\x12(\n" +
 	"\x04keys\x18\x01 \x03(\v2\x14.types.PluginKeyReadR\x04keys\x12.\n" +
-	"\x06ranges\x18\x02 \x03(\v2\x16.types.PluginRangeReadR\x06ranges\"<\n" +
+	"\x06ranges\x18\x02 \x03(\v2\x16.types.PluginRangeReadR\x06ranges\"R\n" +
 	"\rPluginKeyRead\x12\x19\n" +
 	"\bquery_id\x18\x01 \x01(\x04R\aqueryId\x12\x10\n" +
-	"\x03key\x18\x02 \x01(\fR\x03key\"t\n" +
+	"\x03key\x18\x02 \x01(\fR\x03key\x12\x14\n" +
+	"\x05prove\x18\x03 \x01(\bR\x05prove\"t\n" +
 	"\x0fPluginRangeRead\x12\x19\n" +
 	"\bquery_id\x18\x01 \x01(\x04R\aqueryId\x12\x16\n" +
 	"\x06prefix\x18\x02 \x01(\fR\x06prefix\x12\x14\n" +
@@ -1960,10 +2093,16 @@ const file_plugin_proto_rawDesc = "" +
 	"\areverse\x18\x04 \x01(\bR\areverse\"v\n" +
 	"\x17PluginStateReadResponse\x121\n" +
 	"\aresults\x18\x01 \x03(\v2\x17.types.PluginReadResultR\aresults\x12(\n" +
-	"\x05error\x18c \x01(\v2\x12.types.PluginErrorR\x05error\"`\n" +
+	"\x05error\x18c \x01(\v2\x12.types.PluginErrorR\x05error\"\xa0\x01\n" +
 	"\x10PluginReadResult\x12\x19\n" +
 	"\bquery_id\x18\x01 \x01(\x04R\aqueryId\x121\n" +
-	"\aentries\x18\x02 \x03(\v2\x17.types.PluginStateEntryR\aentries\"r\n" +
+	"\aentries\x18\x02 \x03(\v2\x17.types.PluginStateEntryR\aentries\x12&\n" +
+	"\x05proof\x18\x03 \x03(\v2\x10.types.ProofNodeR\x05proof\x12\x16\n" +
+	"\x06exists\x18\x04 \x01(\bR\x06exists\"M\n" +
+	"\tProofNode\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\fR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\fR\x05value\x12\x18\n" +
+	"\abitmask\x18\x03 \x01(\x05R\abitmask\"r\n" +
 	"\x17PluginStateWriteRequest\x12&\n" +
 	"\x04sets\x18\x01 \x03(\v2\x12.types.PluginSetOpR\x04sets\x12/\n" +
 	"\adeletes\x18\x02 \x03(\v2\x15.types.PluginDeleteOpR\adeletes\"D\n" +
@@ -1990,7 +2129,7 @@ func file_plugin_proto_rawDescGZIP() []byte {
 	return file_plugin_proto_rawDescData
 }
 
-var file_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
+var file_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
 var file_plugin_proto_goTypes = []any{
 	(*FSMToPlugin)(nil),              // 0: types.FSMToPlugin
 	(*PluginToFSM)(nil),              // 1: types.PluginToFSM
@@ -2014,13 +2153,14 @@ var file_plugin_proto_goTypes = []any{
 	(*PluginRangeRead)(nil),          // 19: types.PluginRangeRead
 	(*PluginStateReadResponse)(nil),  // 20: types.PluginStateReadResponse
 	(*PluginReadResult)(nil),         // 21: types.PluginReadResult
-	(*PluginStateWriteRequest)(nil),  // 22: types.PluginStateWriteRequest
-	(*PluginStateWriteResponse)(nil), // 23: types.PluginStateWriteResponse
-	(*PluginSetOp)(nil),              // 24: types.PluginSetOp
-	(*PluginDeleteOp)(nil),           // 25: types.PluginDeleteOp
-	(*PluginStateEntry)(nil),         // 26: types.PluginStateEntry
-	(*Event)(nil),                    // 27: types.Event
-	(*Transaction)(nil),              // 28: types.Transaction
+	(*ProofNode)(nil),                // 22: types.ProofNode
+	(*PluginStateWriteRequest)(nil),  // 23: types.PluginStateWriteRequest
+	(*PluginStateWriteResponse)(nil), // 24: types.PluginStateWriteResponse
+	(*PluginSetOp)(nil),              // 25: types.PluginSetOp
+	(*PluginDeleteOp)(nil),           // 26: types.PluginDeleteOp
+	(*PluginStateEntry)(nil),         // 27: types.PluginStateEntry
+	(*Event)(nil),                    // 28: types.Event
+	(*Transaction)(nil),              // 29: types.Transaction
 }
 var file_plugin_proto_depIdxs = []int32{
 	3,  // 0: types.FSMToPlugin.config:type_name -> types.PluginFSMConfig
@@ -2030,7 +2170,7 @@ var file_plugin_proto_depIdxs = []int32{
 	10, // 4: types.FSMToPlugin.deliver:type_name -> types.PluginDeliverRequest
 	12, // 5: types.FSMToPlugin.end:type_name -> types.PluginEndRequest
 	20, // 6: types.FSMToPlugin.state_read:type_name -> types.PluginStateReadResponse
-	23, // 7: types.FSMToPlugin.state_write:type_name -> types.PluginStateWriteResponse
+	24, // 7: types.FSMToPlugin.state_write:type_name -> types.PluginStateWriteResponse
 	16, // 8: types.FSMToPlugin.query:type_name -> types.PluginQueryResponse
 	14, // 9: types.FSMToPlugin.error:type_name -> types.PluginError
 	2,  // 10: types.PluginToFSM.config:type_name -> types.PluginConfig
@@ -2040,18 +2180,18 @@ var file_plugin_proto_depIdxs = []int32{
 	11, // 14: types.PluginToFSM.deliver:type_name -> types.PluginDeliverResponse
 	13, // 15: types.PluginToFSM.end:type_name -> types.PluginEndResponse
 	17, // 16: types.PluginToFSM.state_read:type_name -> types.PluginStateReadRequest
-	22, // 17: types.PluginToFSM.state_write:type_name -> types.PluginStateWriteRequest
+	23, // 17: types.PluginToFSM.state_write:type_name -> types.PluginStateWriteRequest
 	15, // 18: types.PluginToFSM.query:type_name -> types.PluginQueryRequest
 	2,  // 19: types.PluginFSMConfig.config:type_name -> types.PluginConfig
 	14, // 20: types.PluginGenesisResponse.error:type_name -> types.PluginError
-	27, // 21: types.PluginBeginResponse.events:type_name -> types.Event
+	28, // 21: types.PluginBeginResponse.events:type_name -> types.Event
 	14, // 22: types.PluginBeginResponse.error:type_name -> types.PluginError
-	28, // 23: types.PluginCheckRequest.tx:type_name -> types.Transaction
+	29, // 23: types.PluginCheckRequest.tx:type_name -> types.Transaction
 	14, // 24: types.PluginCheckResponse.error:type_name -> types.PluginError
-	28, // 25: types.PluginDeliverRequest.tx:type_name -> types.Transaction
-	27, // 26: types.PluginDeliverResponse.events:type_name -> types.Event
+	29, // 25: types.PluginDeliverRequest.tx:type_name -> types.Transaction
+	28, // 26: types.PluginDeliverResponse.events:type_name -> types.Event
 	14, // 27: types.PluginDeliverResponse.error:type_name -> types.PluginError
-	27, // 28: types.PluginEndResponse.events:type_name -> types.Event
+	28, // 28: types.PluginEndResponse.events:type_name -> types.Event
 	14, // 29: types.PluginEndResponse.error:type_name -> types.PluginError
 	17, // 30: types.PluginQueryRequest.read:type_name -> types.PluginStateReadRequest
 	20, // 31: types.PluginQueryResponse.read:type_name -> types.PluginStateReadResponse
@@ -2060,15 +2200,16 @@ var file_plugin_proto_depIdxs = []int32{
 	19, // 34: types.PluginStateReadRequest.ranges:type_name -> types.PluginRangeRead
 	21, // 35: types.PluginStateReadResponse.results:type_name -> types.PluginReadResult
 	14, // 36: types.PluginStateReadResponse.error:type_name -> types.PluginError
-	26, // 37: types.PluginReadResult.entries:type_name -> types.PluginStateEntry
-	24, // 38: types.PluginStateWriteRequest.sets:type_name -> types.PluginSetOp
-	25, // 39: types.PluginStateWriteRequest.deletes:type_name -> types.PluginDeleteOp
-	14, // 40: types.PluginStateWriteResponse.error:type_name -> types.PluginError
-	41, // [41:41] is the sub-list for method output_type
-	41, // [41:41] is the sub-list for method input_type
-	41, // [41:41] is the sub-list for extension type_name
-	41, // [41:41] is the sub-list for extension extendee
-	0,  // [0:41] is the sub-list for field type_name
+	27, // 37: types.PluginReadResult.entries:type_name -> types.PluginStateEntry
+	22, // 38: types.PluginReadResult.proof:type_name -> types.ProofNode
+	25, // 39: types.PluginStateWriteRequest.sets:type_name -> types.PluginSetOp
+	26, // 40: types.PluginStateWriteRequest.deletes:type_name -> types.PluginDeleteOp
+	14, // 41: types.PluginStateWriteResponse.error:type_name -> types.PluginError
+	42, // [42:42] is the sub-list for method output_type
+	42, // [42:42] is the sub-list for method input_type
+	42, // [42:42] is the sub-list for extension type_name
+	42, // [42:42] is the sub-list for extension extendee
+	0,  // [0:42] is the sub-list for field type_name
 }
 
 func init() { file_plugin_proto_init() }
@@ -2107,7 +2248,7 @@ func file_plugin_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_plugin_proto_rawDesc), len(file_plugin_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   27,
+			NumMessages:   28,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

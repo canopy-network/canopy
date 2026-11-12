@@ -37,13 +37,13 @@ message MessageReward {
 
 // MessageFaucet is a test-only transaction that mints tokens to any address
 // No balance check required - just mints tokens for testing purposes
+// NOTE: there is intentionally NO `amount` field. The minted amount is operator-controlled via
+// config.json `pluginConfig.faucetAmount` (see Step 6b), not supplied per-transaction over RPC.
 message MessageFaucet {
   // signer_address: the address signing this transaction (for auth)
   bytes signer_address = 1; // @gotags: json:"signerAddress"
   // recipient_address: who receives the tokens
   bytes recipient_address = 2; // @gotags: json:"recipientAddress"
-  // amount: tokens to mint
-  uint64 amount = 3;
 }
 ```
 
@@ -131,11 +131,8 @@ func (c *Contract) CheckMessageFaucet(msg *MessageFaucet) *PluginCheckResponse {
         return &PluginCheckResponse{Error: ErrInvalidAddress()}
     }
 
-    // Validate amount - must be greater than zero.
-    // Zero-amount transactions are meaningless and waste block space.
-    if msg.Amount == 0 {
-        return &PluginCheckResponse{Error: ErrInvalidAmount()}
-    }
+    // NOTE: there is no amount to validate here — the faucet mints a fixed, operator-controlled
+    // amount (pluginConfig.faucetAmount), which is validated once at startup (see Step 6b).
 
     // Return the check response with:
     // - Recipient: who receives funds (used for indexing/notifications)
@@ -270,7 +267,10 @@ func (c *Contract) DeliverMessageFaucet(msg *MessageFaucet) *PluginDeliverRespon
     // CORE LOGIC: Add the faucet amount to the recipient's balance.
     // This is where tokens are "minted" - we simply increase the balance.
     // No balance check needed because faucet creates tokens from nothing.
-    recipient.Amount += msg.Amount
+    // The amount is NOT taken from the message; it comes from the operator-controlled
+    // pluginConfig.faucetAmount, decoded + validated once at startup (see Step 6b).
+    faucetAmount := c.plugin.Settings.FaucetAmount
+    recipient.Amount += faucetAmount
 
     // Marshal the updated account back to protobuf bytes for storage.
     recipientBytes, err = Marshal(recipient)
@@ -464,12 +464,73 @@ func (p *Plugin) StartRPCServer() {
 }
 ```
 
-Each handler calls the detached, read-only `QueryState`:
+Each handler calls the detached, read-only query path:
 
 - Without `?address`, it does a **range read** over the record prefix (`FaucetPrefix()` / `RewardPrefix()`) and returns every record.
-- With `?address=<hex>`, it does a **single-key read** (`KeyForFaucet(addr)` / `KeyForReward(addr)`) and returns just that recipient's record.
+- With `?address=<hex>`, it does a **single-key read** that also asks the FSM for a **merkle proof**, so the caller can verify the answer without trusting the node (see below).
 
 The listen address comes from the `rpcAddress` config field (default `0.0.0.0:50010`).
+
+### Return a verifiable proof (recommended)
+
+A plain `QueryState` answer is only as trustworthy as the node that served it. The same socket can return a sparse-merkle-tree **proof** alongside the value, plus the `stateRoot` and `height` it was read at. A client authenticates the root independently (via the quorum certificate) and then verifies the proof against it — so a lying or buggy node can at worst make verification *fail*; it can never forge an answer.
+
+Use the `QueryStateWithProof(height, key)` helper (in `contract/plugin.go`) for the single-key endpoint. It sets `prove=true` on the read and returns the value, whether the key exists, the proof, and the committed `stateRoot`/`height`:
+
+```go
+// faucetProofResponse is the JSON shape returned for a single, verifiable faucet record.
+type faucetProofResponse struct {
+    Height    uint64       `json:"height"`
+    StateRoot string       `json:"stateRoot"`
+    Key       string       `json:"key"`
+    Exists    bool         `json:"exists"`
+    Value     string       `json:"value"`            // raw committed bytes (hex) the proof commits to
+    Proof     []*ProofNode `json:"proof"`            // membership (exists) or non-membership proof
+    Faucet    *Faucet      `json:"faucet,omitempty"` // convenience view only; a client should verify Value
+}
+
+// GET /v1/query/faucets?address=<hex>[&height=<uint64>]
+func (p *Plugin) handleQueryFaucets(w http.ResponseWriter, r *http.Request) {
+    addrHex := r.URL.Query().Get("address")
+    if addrHex == "" {
+        p.handleFaucetList(w, r) // no address -> range read (returns {"faucets":[...]})
+        return
+    }
+    addr, err := hex.DecodeString(addrHex)
+    if err != nil {
+        http.Error(w, "bad address", http.StatusBadRequest)
+        return
+    }
+    height, _ := strconv.ParseUint(r.URL.Query().Get("height"), 10, 64) // 0 = latest committed
+    key := KeyForFaucet(addr)
+
+    // ask for the value AND a merkle proof over the socket (prove=true)
+    sp, pErr := p.QueryStateWithProof(height, key)
+    if pErr != nil {
+        http.Error(w, pErr.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    resp := faucetProofResponse{
+        Height:    sp.Height,
+        StateRoot: hex.EncodeToString(sp.StateRoot),
+        Key:       hex.EncodeToString(key),
+        Exists:    sp.Exists,
+        Value:     hex.EncodeToString(sp.Value),
+        Proof:     sp.Proof,
+    }
+    if sp.Exists {
+        faucet := new(Faucet)
+        if err := Unmarshal(sp.Value, faucet); err == nil {
+            resp.Faucet = faucet
+        }
+    }
+    w.Header().Set("Content-Type", "application/json")
+    _ = json.NewEncoder(w).Encode(resp)
+}
+```
+
+> The `faucet` field is a convenience view only. A trustless client should **ignore it**, recompute the key from the address, verify `proof` against the authenticated `stateRoot`, and decode `value` itself. When the key is absent, `exists` is `false` and `proof` is a **non-membership** proof. The reward endpoint follows the same pattern via `KeyForReward(addr)`.
 
 ### Query the endpoints
 
@@ -480,8 +541,17 @@ After faucet/reward transactions have been included in blocks:
 curl 'http://localhost:50010/v1/query/faucets'
 # {"faucets":[{"recipientAddress":"...","totalAmount":1000000000,"count":1}],"count":1,"height":0}
 
-# a single recipient's faucet record
+# a single recipient's faucet record, now with a verifiable merkle proof
 curl 'http://localhost:50010/v1/query/faucets?address=<recipient-hex>'
+# {
+#   "height": 123,
+#   "stateRoot": "a1b2c3...",
+#   "key": "64...",
+#   "exists": true,
+#   "value": "0a14...",                       # raw committed bytes the proof commits to
+#   "proof": [{"key":"...","value":"...","bitmask":0}, ...],
+#   "faucet": {"recipientAddress":"...","totalAmount":1000000000,"count":1}
+# }
 
 # all reward records (optionally at a historical height)
 curl 'http://localhost:50010/v1/query/rewards?height=42'
@@ -498,6 +568,76 @@ Build the plugin:
 cd plugin/go
 make build
 ```
+
+## Step 6b: Configure the faucet amount via `pluginConfig`
+
+The faucet amount is **operator-controlled**, not supplied per-transaction. It is read from the
+node's `config.json` `pluginConfig` field, which Canopy forwards verbatim to the plugin during the
+handshake. `pluginConfig` is intentionally typed as *any* JSON on the node side, so each plugin can
+define its own schema and validate it at startup.
+
+### How it flows
+
+1. **Node config** (`~/.canopy/config.json`) carries an opaque `pluginConfig` JSON value:
+
+   ```json
+   {
+     "plugin": "go",
+     "pluginConfig": { "faucetAmount": 1000000000 }
+   }
+   ```
+
+2. **Canopy core** (`lib/config.go` `MainConfig.PluginConfig`) reads it as raw JSON and forwards it
+   to the plugin in the handshake response (`PluginFSMConfig.plugin_config`). Core never inspects it.
+
+3. **The plugin** decodes + validates it at startup. The base SDK (`contract/plugin.go`) defines the
+   expected shape and the single validation entry point:
+
+   ```go
+   // Config gains an opaque pluginConfig field (any JSON)
+   type Config struct {
+       ChainId     uint64 `json:"chainId"`
+       DataDirPath string `json:"dataDirPath"`
+       RPCAddress  string `json:"rpcAddress"`
+       PluginConfig any    `json:"pluginConfig"`
+   }
+
+   // PluginSettings is the typed, validated shape the plugin expects
+   type PluginSettings struct {
+       FaucetAmount uint64 `json:"faucetAmount"`
+   }
+
+   // ParsePluginConfig decodes + validates the forwarded JSON at startup; a malformed blob fails
+   // the handshake (and the plugin exits), satisfying "validate it is in the expected form".
+   func ParsePluginConfig(raw []byte) (*PluginSettings, *PluginError) { ... }
+   ```
+
+   `Handshake()` calls `ParsePluginConfig(wrapper.Config.GetPluginConfig())` and stores the result on
+   `p.Settings`, so handlers can read `c.plugin.Settings.FaucetAmount`.
+
+### Require a non-zero faucet amount (tutorial validation)
+
+Because this plugin's faucet is useless without a configured amount, extend `ParsePluginConfig` to
+reject a missing/zero `faucetAmount` so the plugin fails fast at startup:
+
+```go
+func ParsePluginConfig(raw []byte) (*PluginSettings, *PluginError) {
+    settings := new(PluginSettings)
+    if len(raw) == 0 {
+        return nil, ErrInvalidPluginConfig("missing pluginConfig (expected { \"faucetAmount\": <uint64> })")
+    }
+    if err := json.Unmarshal(raw, settings); err != nil {
+        return nil, ErrInvalidPluginConfig(err.Error())
+    }
+    if settings.FaucetAmount == 0 {
+        return nil, ErrInvalidPluginConfig("faucetAmount must be greater than zero")
+    }
+    return settings, nil
+}
+```
+
+The tutorial test (`tutorial/rpc_test.go`) asserts the faucet mints exactly this configured amount
+(`faucetConfiguredAmount`), proving the amount comes from `pluginConfig` and not from the RPC request.
 
 ## Step 7: Running Canopy with the Plugin
 
@@ -521,11 +661,14 @@ Edit `~/.canopy/config.json` and add or modify the `plugin` field to `"go"`:
 ```json
 {
   "plugin": "go",
+  "pluginConfig": { "faucetAmount": 1000000000 },
   ...
 }
 ```
 
 **Note**: The `plugin` field should be at the top level of the JSON configuration. If it doesn't exist, add it as the first field after the opening brace.
+
+**Note**: `pluginConfig` is an opaque (any) JSON value that Canopy forwards to the plugin unchanged. For this tutorial the Go plugin expects `{ "faucetAmount": <uint64> }` and validates it at startup (see Step 6b); the plugin will refuse to start if it is missing or `faucetAmount` is zero.
 
 ### 3. Start Canopy
 

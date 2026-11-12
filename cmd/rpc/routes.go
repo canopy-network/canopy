@@ -33,6 +33,7 @@ const (
 	ValParamRoutePath              = "/v1/query/val-params"
 	EcoParamRoutePath              = "/v1/query/eco-params"
 	StateRoutePath                 = "/v1/query/state"
+	ProofRoutePath                 = "/v1/query/proof"
 	StateDiffRoutePath             = "/v1/query/state-diff"
 	StateDiffGetRoutePath          = "/v1/query/state-diff"
 	CertByHeightRoutePath          = "/v1/query/cert-by-height"
@@ -82,6 +83,7 @@ const (
 	TxUnpauseRoutePath         = "/v1/admin/tx-unpause"
 	TxChangeParamRoutePath     = "/v1/admin/tx-change-param"
 	TxDAOTransferRoutePath     = "/v1/admin/tx-dao-transfer"
+	TxByzOutputRoutePath       = "/v1/admin/tx-change-byzantine-output"
 	TxCreateOrderRoutePath     = "/v1/admin/tx-create-order"
 	TxEditOrderRoutePath       = "/v1/admin/tx-edit-order"
 	TxDeleteOrderRoutePath     = "/v1/admin/tx-delete-order"
@@ -130,6 +132,7 @@ const (
 	ValParamRouteName              = "val-params"
 	EcoParamRouteName              = "eco-params"
 	StateRouteName                 = "state"
+	ProofRouteName                 = "proof"
 	StateDiffRouteName             = "state-diff"
 	StateDiffGetRouteName          = "state-diff-get"
 	CertByHeightRouteName          = "cert-by-height"
@@ -182,6 +185,7 @@ const (
 	TxUnpauseRouteName              = "tx-unpause"
 	TxChangeParamRouteName          = "tx-change-param"
 	TxDAOTransferRouteName          = "tx-dao-transfer"
+	TxByzOutputRouteName            = "tx-change-byzantine-output"
 	TxSubsidyRouteName              = "tx-subsidy"
 	TxCreateOrderRouteName          = "tx-create-order"
 	TxEditOrderRouteName            = "tx-edit-order"
@@ -237,6 +241,7 @@ var routePaths = routes{
 	ValParamRouteName:              {Method: http.MethodPost, Path: ValParamRoutePath},
 	EcoParamRouteName:              {Method: http.MethodPost, Path: EcoParamRoutePath},
 	StateRouteName:                 {Method: http.MethodGet, Path: StateRoutePath},
+	ProofRouteName:                 {Method: http.MethodPost, Path: ProofRoutePath},
 	StateDiffRouteName:             {Method: http.MethodPost, Path: StateDiffRoutePath},
 	StateDiffGetRouteName:          {Method: http.MethodGet, Path: StateDiffGetRoutePath},
 	CertByHeightRouteName:          {Method: http.MethodPost, Path: CertByHeightRoutePath},
@@ -285,6 +290,7 @@ var routePaths = routes{
 	TxUnpauseRouteName:              {Method: http.MethodPost, Path: TxUnpauseRoutePath},
 	TxChangeParamRouteName:          {Method: http.MethodPost, Path: TxChangeParamRoutePath},
 	TxDAOTransferRouteName:          {Method: http.MethodPost, Path: TxDAOTransferRoutePath},
+	TxByzOutputRouteName:            {Method: http.MethodPost, Path: TxByzOutputRoutePath},
 	TxCreateOrderRouteName:          {Method: http.MethodPost, Path: TxCreateOrderRoutePath},
 	TxEditStakeRouteName:            {Method: http.MethodPost, Path: TxEditStakeRoutePath},
 	TxDeleteOrderRouteName:          {Method: http.MethodPost, Path: TxDeleteOrderRoutePath},
@@ -339,6 +345,7 @@ func createRouter(s *Server) *httprouter.Router {
 		EcoParamRouteName:              s.EcoParameters,
 		SupplyRouteName:                s.Supply,
 		StateRouteName:                 s.State,
+		ProofRouteName:                 s.Proof,
 		StateDiffRouteName:             s.StateDiff,
 		StateDiffGetRouteName:          s.StateDiff,
 		CertByHeightRouteName:          s.CertByHeight,
@@ -404,6 +411,7 @@ func createAdminRouter(s *Server) *httprouter.Router {
 		TxUnpauseRouteName:              s.TransactionUnpause,
 		TxChangeParamRouteName:          s.TransactionChangeParam,
 		TxDAOTransferRouteName:          s.TransactionDAOTransfer,
+		TxByzOutputRouteName:            s.TransactionChangeByzantineOutput,
 		TxCreateOrderRouteName:          s.TransactionCreateOrder,
 		TxEditOrderRouteName:            s.TransactionEditOrder,
 		TxDeleteOrderRouteName:          s.TransactionDeleteOrder,
