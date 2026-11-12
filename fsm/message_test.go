@@ -219,6 +219,29 @@ func TestHandleMessage(t *testing.T) {
 			},
 		},
 		{
+			name:   "message change byzantine output",
+			detail: "basic happy path handling for a governance-directed output change",
+			preset: func(sm StateMachine) {
+				require.NoError(t, sm.SetValidator(&Validator{
+					Address:         newTestAddressBytes(t),
+					Output:          newTestAddressBytes(t, 1),
+					UnstakingHeight: 10,
+				}))
+			},
+			msg: &MessageChangeByzantineOutput{
+				ValidatorAddress: newTestAddressBytes(t),
+				OutputAddress:    newTestAddressBytes(t, 2),
+				Signer:           newTestAddressBytes(t, 3),
+				StartHeight:      1,
+				EndHeight:        2,
+			},
+			validate: func(sm StateMachine) {
+				validator, e := sm.GetValidator(newTestAddress(t))
+				require.NoError(t, e)
+				require.Equal(t, newTestAddressBytes(t, 2), validator.Output)
+			},
+		},
+		{
 			name:   "message subsidy",
 			detail: "basic 'happy path' handling for message subsidy",
 			preset: func(sm StateMachine) {
@@ -427,6 +450,11 @@ func TestGetFeeForMessage(t *testing.T) {
 			msg:    &MessageDAOTransfer{},
 		},
 		{
+			name:   "msg change byzantine output",
+			detail: "evaluates the function for message change byzantine output",
+			msg:    &MessageChangeByzantineOutput{},
+		},
+		{
 			name:   "msg certificate results",
 			detail: "evaluates the function for message certificate results",
 			msg:    &MessageCertificateResults{},
@@ -478,6 +506,8 @@ func TestGetFeeForMessage(t *testing.T) {
 					return feeParams.ChangeParameterFee
 				case *MessageDAOTransfer:
 					return feeParams.DaoTransferFee
+				case *MessageChangeByzantineOutput:
+					return feeParams.ChangeByzantineOutputFee
 				case *MessageCertificateResults:
 					return feeParams.CertificateResultsFee
 				case *MessageSubsidy:
@@ -548,6 +578,11 @@ func TestGetAuthorizedSignersFor(t *testing.T) {
 			name:     "msg dao transfer",
 			detail:   "retrieves the authorized signers for message dao transfer",
 			msg:      &MessageDAOTransfer{Address: newTestAddressBytes(t)},
+			expected: [][]byte{newTestAddressBytes(t)},
+		}, {
+			name:     "msg change byzantine output",
+			detail:   "retrieves the proposal creator authorized to sign an output change",
+			msg:      &MessageChangeByzantineOutput{Signer: newTestAddressBytes(t)},
 			expected: [][]byte{newTestAddressBytes(t)},
 		}, {
 			name:     "msg subsidy",
