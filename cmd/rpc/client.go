@@ -431,9 +431,9 @@ func (c *Client) Transactions(txs []lib.TransactionI) (hash *string, err lib.Err
 	return
 }
 
-func (c *Client) Keystore() (keystore *crypto.Keystore, err lib.ErrorI) {
-	keystore = new(crypto.Keystore)
-	err = c.get(KeystoreRouteName, "", keystore, true)
+func (c *Client) KeystoreNicknames() (nicknames map[string]crypto.NicknameEntry, err lib.ErrorI) {
+	nicknames = make(map[string]crypto.NicknameEntry)
+	err = c.get(KeystoreNicknamesRouteName, "", &nicknames, true)
 	return
 }
 func (c *Client) KeystoreNewKey(password, nickname string) (address crypto.AddressI, err lib.ErrorI) {
@@ -525,6 +525,62 @@ func (c *Client) KeystoreGet(addrOrNickname AddrOrNickname, password string) (re
 		err = c.keystoreRequest(KeystoreGetRouteName, keystoreRequest{
 			nicknameRequest: nicknameRequest{addrOrNickname.Nickname},
 			passwordRequest: passwordRequest{password},
+		}, returned)
+		return
+	}
+
+	return
+}
+
+func (c *Client) KeystoreExport(addrOrNickname AddrOrNickname, password string) (returned *crypto.Keystore, err lib.ErrorI) {
+	returned = new(crypto.Keystore)
+
+	if addrOrNickname.Address != "" {
+		var bz lib.HexBytes
+		bz, err = lib.NewHexBytesFromString(addrOrNickname.Address)
+		if err != nil {
+			return
+		}
+		err = c.keystoreRequest(KeystoreExportRouteName, keystoreRequest{
+			addressRequest:  addressRequest{bz},
+			passwordRequest: passwordRequest{password},
+		}, returned)
+		return
+	}
+
+	if addrOrNickname.Nickname != "" {
+		err = c.keystoreRequest(KeystoreExportRouteName, keystoreRequest{
+			nicknameRequest: nicknameRequest{addrOrNickname.Nickname},
+			passwordRequest: passwordRequest{password},
+		}, returned)
+		return
+	}
+
+	return
+}
+
+func (c *Client) KeystoreRename(addrOrNickname AddrOrNickname, newNickname, password string) (returned crypto.AddressI, err lib.ErrorI) {
+	returned = new(crypto.Address)
+
+	if addrOrNickname.Address != "" {
+		var bz lib.HexBytes
+		bz, err = lib.NewHexBytesFromString(addrOrNickname.Address)
+		if err != nil {
+			return
+		}
+		err = c.keystoreRequest(KeystoreRenameRouteName, keystoreRequest{
+			addressRequest:  addressRequest{bz},
+			passwordRequest: passwordRequest{password},
+			NewNickname:     newNickname,
+		}, returned)
+		return
+	}
+
+	if addrOrNickname.Nickname != "" {
+		err = c.keystoreRequest(KeystoreRenameRouteName, keystoreRequest{
+			nicknameRequest: nicknameRequest{addrOrNickname.Nickname},
+			passwordRequest: passwordRequest{password},
+			NewNickname:     newNickname,
 		}, returned)
 		return
 	}

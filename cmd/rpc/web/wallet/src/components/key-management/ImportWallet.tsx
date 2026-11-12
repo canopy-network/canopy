@@ -43,9 +43,16 @@ export const ImportWallet = ({ embedded = false, onSuccess }: { embedded?: boole
     };
 
     const invalidateKeystore = async () => {
-        await queryClient.invalidateQueries({ queryKey: ['ds', 'keystore'] });
+        const invalidate = () =>
+            queryClient.invalidateQueries({
+                predicate: (query) =>
+                    Array.isArray(query.queryKey) &&
+                    query.queryKey[0] === 'ds' &&
+                    query.queryKey[2] === 'keystoreNicknames',
+            });
+        await invalidate();
         setTimeout(() => {
-            queryClient.invalidateQueries({ queryKey: ['ds', 'keystore'] });
+            void invalidate();
         }, 500);
     };
 

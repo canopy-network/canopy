@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Copy,
@@ -22,7 +22,6 @@ import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { useToast } from "@/toast/ToastContext";
 import { useAccounts } from "@/app/providers/AccountsProvider";
 import { useDSFetcher } from "@/core/dsFetch";
-import { useDS } from "@/core/useDs";
 import { downloadJson } from "@/helpers/download";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -35,18 +34,22 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [isFetchingKey, setIsFetchingKey] = useState(false);
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [downloadPassword, setDownloadPassword] = useState("");
+  const [downloadPasswordError, setDownloadPasswordError] = useState("");
+  const [isDownloadingKey, setIsDownloadingKey] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
   const [deletePasswordError, setDeletePasswordError] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [renameNickname, setRenameNickname] = useState("");
+  const [renamePassword, setRenamePassword] = useState("");
   const [isRenaming, setIsRenaming] = useState(false);
   const { copyToClipboard } = useCopyToClipboard();
   const toast = useToast();
   const dsFetch = useDSFetcher();
   const queryClient = useQueryClient();
-  const { data: keystore } = useDS("keystore", {});
 
   const panelVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -63,20 +66,19 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
     return `${value.slice(0, start)}...${value.slice(-end)}`;
   };
 
-  const selectedKeyEntry = useMemo(() => {
-    if (!keystore || !selectedAccount) return null;
-    return keystore.addressMap?.[selectedAccount.address] ?? null;
-  }, [keystore, selectedAccount]);
-
   useEffect(() => {
     setPrivateKey("");
     setPrivateKeyVisible(false);
     setShowPasswordModal(false);
     setPassword("");
     setPasswordError("");
+    setShowDownloadModal(false);
+    setDownloadPassword("");
+    setDownloadPasswordError("");
     setIsRenameOpen(false);
-    setRenameNickname(selectedKeyEntry?.keyNickname || selectedAccount?.nickname || "");
-  }, [selectedAccount?.id, selectedAccount?.nickname, selectedKeyEntry?.keyNickname]);
+    setRenameNickname(selectedAccount?.nickname || "");
+    setRenamePassword("");
+  }, [selectedAccount?.id, selectedAccount?.nickname]);
 
   const invalidateKeystore = async () => {
     const invalidate = () =>
@@ -84,7 +86,7 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
         predicate: (query) =>
           Array.isArray(query.queryKey) &&
           query.queryKey[0] === "ds" &&
-          query.queryKey[2] === "keystore",
+          query.queryKey[2] === "keystoreNicknames",
       });
 
     await invalidate();
@@ -102,39 +104,51 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
       return;
     }
 
-    if (!keystore) {
-      toast.error({
-        title: "Keyfile Unavailable",
-        description: "Keystore data is not ready yet.",
-      });
+    setDownloadPassword("");
+    setDownloadPasswordError("");
+    setShowDownloadModal(true);
+  };
+
+  const handleConfirmDownload = async () => {
+    if (!selectedAccount) return;
+    if (!downloadPassword) {
+      setDownloadPasswordError("Password is required.");
       return;
     }
 
-    if (!selectedKeyEntry) {
-      toast.error({
-        title: "Keyfile Unavailable",
-        description: "Selected wallet data is missing in the keystore.",
+    setIsDownloadingKey(true);
+    setDownloadPasswordError("");
+
+    try {
+      // Ask the backend for the single encrypted keyfile, verified with the password.
+      // The address uniquely identifies the key; never send the display nickname (it may be a
+      // placeholder for accounts without a real nickname).
+      const keyfilePayload = await dsFetch("keystoreExport", {
+        address: selectedAccount.address,
+        password: downloadPassword,
       });
-      return;
+
+      // Prefer the key's real nickname (from the exported keyfile) for the filename, else the address.
+      const realNickname = Object.keys(
+        (keyfilePayload as { nicknameMap?: Record<string, string> })?.nicknameMap ?? {}
+      )[0];
+      downloadJson(keyfilePayload, `keyfile-${realNickname || selectedAccount.address}`);
+
+      setShowDownloadModal(false);
+      setDownloadPassword("");
+      toast.success({
+        title: "Download Started",
+        description: "Your keyfile JSON is downloading.",
+      });
+    } catch (error) {
+      setDownloadPasswordError("Unable to unlock with that password.");
+      toast.error({
+        title: "Export Failed",
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setIsDownloadingKey(false);
     }
-
-    const nickname = selectedKeyEntry.keyNickname || selectedAccount.nickname;
-    const nicknameValue =
-      (keystore.nicknameMap ?? {})[nickname] ?? selectedKeyEntry.keyAddress;
-    const keyfilePayload = {
-      addressMap: {
-        [selectedKeyEntry.keyAddress]: selectedKeyEntry,
-      },
-      nicknameMap: {
-        [nickname]: nicknameValue,
-      },
-    };
-
-    downloadJson(keyfilePayload, `keyfile-${nickname}`);
-    toast.success({
-      title: "Download Started",
-      description: "Your keyfile JSON is downloading.",
-    });
   };
 
   const handleRevealPrivateKeys = () => {
@@ -173,10 +187,11 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
     setPasswordError("");
 
     try {
+      // The address uniquely identifies the key; never send the display nickname (it may be a
+      // placeholder for accounts without a real nickname).
       const response = await dsFetch("keystoreGet", {
-        address: selectedKeyEntry?.keyAddress ?? selectedAccount.address,
+        address: selectedAccount.address,
         password,
-        nickname: selectedKeyEntry?.keyNickname,
       });
       const extracted =
         (response as any)?.privateKey ??
@@ -224,10 +239,10 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
   };
 
   const handleRenameAccount = async () => {
-    if (!selectedAccount || !selectedKeyEntry) return;
+    if (!selectedAccount) return;
 
     const nextNickname = renameNickname.trim();
-    const currentNickname = selectedKeyEntry.keyNickname || selectedAccount.nickname;
+    const currentNickname = selectedAccount.nickname;
 
     if (!nextNickname) {
       toast.error({
@@ -242,15 +257,20 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
       return;
     }
 
+    if (!renamePassword) {
+      toast.error({
+        title: "Password required",
+        description: "Enter your wallet password to rename this account.",
+      });
+      return;
+    }
+
     setIsRenaming(true);
     try {
-      await dsFetch("keystoreImport", {
-        nickname: nextNickname,
-        address: selectedKeyEntry.keyAddress,
-        publicKey: selectedKeyEntry.publicKey,
-        salt: selectedKeyEntry.salt,
-        encrypted: selectedKeyEntry.encrypted,
-        keyAddress: selectedKeyEntry.keyAddress,
+      await dsFetch("keystoreRename", {
+        address: selectedAccount.address,
+        newNickname: nextNickname,
+        password: renamePassword,
       });
 
       await invalidateKeystore();
@@ -260,6 +280,7 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
         description: `Wallet renamed to "${nextNickname}".`,
       });
       setIsRenameOpen(false);
+      setRenamePassword("");
     } catch (error) {
       toast.error({
         title: "Rename failed",
@@ -282,10 +303,10 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
     setDeletePasswordError("");
 
     try {
-      const nickname = selectedKeyEntry?.keyNickname || selectedAccount.nickname;
+      const nickname = selectedAccount.nickname;
 
       await dsFetch("keystoreDelete", {
-        address: selectedKeyEntry?.keyAddress ?? selectedAccount.address,
+        address: selectedAccount.address,
         password: deletePassword,
       });
 
@@ -352,10 +373,11 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
                 size="sm"
                 className="h-11 px-3"
                 onClick={() => {
-                  setRenameNickname(selectedKeyEntry?.keyNickname || selectedAccount?.nickname || "");
+                  setRenameNickname(selectedAccount?.nickname || "");
+                  setRenamePassword("");
                   setIsRenameOpen((value) => !value);
                 }}
-                disabled={!selectedAccount || !selectedKeyEntry}
+                disabled={!selectedAccount}
               >
                 <Pencil className="h-4 w-4" />
                 Rename
@@ -371,6 +393,13 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
                   placeholder="Wallet nickname"
                   className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
                   autoFocus
+                />
+                <input
+                  type="password"
+                  value={renamePassword}
+                  onChange={(e) => setRenamePassword(e.target.value)}
+                  placeholder="Wallet password"
+                  className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
                 />
                 <div className="flex gap-2">
                   <Button
@@ -389,7 +418,8 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
                     className="h-10"
                     onClick={() => {
                       setIsRenameOpen(false);
-                      setRenameNickname(selectedKeyEntry?.keyNickname || selectedAccount?.nickname || "");
+                      setRenameNickname(selectedAccount?.nickname || "");
+                      setRenamePassword("");
                     }}
                     disabled={isRenaming}
                   >
@@ -570,6 +600,50 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
         </div>
       )}
 
+      {showDownloadModal && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-[#0f0f0f]/80 backdrop-blur-md p-3 sm:p-4">
+          <div className="w-full max-w-sm max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] bg-[#171717] border border-[#272729] rounded-2xl p-4 sm:p-5 shadow-[0_24px_72px_rgba(0,0,0,0.55)] overflow-y-auto">
+            <h3 className="text-lg text-foreground font-semibold mb-2">
+              Download Keyfile
+            </h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Enter your wallet password to export the encrypted keyfile for this account.
+            </p>
+            <input
+              type="password"
+              value={downloadPassword}
+              onChange={(e) => setDownloadPassword(e.target.value)}
+              placeholder="Password"
+              className="w-full bg-[#0f0f0f] text-foreground border border-[#272729] rounded-lg px-3 py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#35cd48]/25"
+              autoFocus
+            />
+            {downloadPasswordError && (
+              <div className="text-sm text-[#ff1845] mt-2">{downloadPasswordError}</div>
+            )}
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => {
+                  setShowDownloadModal(false);
+                  setDownloadPassword("");
+                  setDownloadPasswordError("");
+                }}
+                className="px-4 py-2 rounded-lg border border-[#272729] bg-[#0f0f0f] text-white hover:bg-[#272729]"
+                disabled={isDownloadingKey}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDownload}
+                className="px-4 py-2 rounded-lg bg-[#35cd48] text-[#0f0f0f] hover:bg-[#35cd48]/90"
+                disabled={isDownloadingKey}
+              >
+                {isDownloadingKey ? "Exporting..." : "Download"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showDeleteModal && (
         <div className="fixed inset-0 z-[250] flex items-center justify-center bg-[#0f0f0f]/80 backdrop-blur-md p-3 sm:p-4">
           <div className="w-full max-w-md max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] bg-[#171717] border border-[#ff1845]/35 rounded-2xl p-4 sm:p-6 shadow-[0_24px_72px_rgba(0,0,0,0.55)] overflow-y-auto">
@@ -594,7 +668,7 @@ export const CurrentWallet = ({ embedded = false }: { embedded?: boolean }): JSX
 
             <p className="text-sm text-muted-foreground mb-4">
               Enter your wallet password to confirm deletion of <span className="font-semibold text-foreground">
-                {selectedKeyEntry?.keyNickname || selectedAccount?.nickname}
+                {selectedAccount?.nickname}
               </span>:
             </p>
 

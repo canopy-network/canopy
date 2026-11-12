@@ -42,12 +42,14 @@ func init() {
 	txStakeCmd.PersistentFlags().BoolVar(&earlyWithdrawal, "early-withdrawal", false, "immediately withdrawal any rewards (with penalty) directly to output address instead of auto-compounding directly to stake")
 	txEditStakeCmd.PersistentFlags().BoolVar(&earlyWithdrawal, "early-withdrawal", false, "immediately withdrawal any rewards (with penalty) directly to output address instead of auto-compounding directly to stake")
 	txCreateOrderCmd.PersistentFlags().StringVar(&data, "data", "", "data for create order")
-	adminCmd.AddCommand(ksCmd)
+	adminCmd.AddCommand(ksNicknamesCmd)
 	adminCmd.AddCommand(ksNewKeyCmd)
 	adminCmd.AddCommand(ksImportCmd)
 	adminCmd.AddCommand(ksImportRawCmd)
 	adminCmd.AddCommand(ksDeleteCmd)
 	adminCmd.AddCommand(ksGetCmd)
+	adminCmd.AddCommand(ksExportCmd)
+	adminCmd.AddCommand(ksRenameCmd)
 	adminCmd.AddCommand(txSendCmd)
 	adminCmd.AddCommand(txSendVestingCmd)
 	adminCmd.AddCommand(txStakeCmd)
@@ -82,11 +84,11 @@ func init() {
 }
 
 var (
-	ksCmd = &cobra.Command{
-		Use:   "ks",
-		Short: "query the keystore of the node",
+	ksNicknamesCmd = &cobra.Command{
+		Use:   "ks-nicknames",
+		Short: "query the non-sensitive list of keys (address, nickname, public key) in the keystore",
 		Run: func(cmd *cobra.Command, args []string) {
-			writeToConsole(client.Keystore())
+			writeToConsole(client.KeystoreNicknames())
 		},
 	}
 
@@ -135,6 +137,24 @@ var (
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			writeToConsole(client.KeystoreGet(argGetAddrOrNickname(args[0]), getPassword()))
+		},
+	}
+
+	ksExportCmd = &cobra.Command{
+		Use:   "ks-export <address or nickname>",
+		Short: "export the encrypted keyfile for the address or nickname (requires password)",
+		Args:  cobra.MinimumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			writeToConsole(client.KeystoreExport(argGetAddrOrNickname(args[0]), getPassword()))
+		},
+	}
+
+	ksRenameCmd = &cobra.Command{
+		Use:   "ks-rename <address or nickname> <new-nickname>",
+		Short: "change the nickname associated with the address or nickname (requires password)",
+		Args:  cobra.MinimumNArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			writeToConsole(client.KeystoreRename(argGetAddrOrNickname(args[0]), args[1], getPassword()))
 		},
 	}
 

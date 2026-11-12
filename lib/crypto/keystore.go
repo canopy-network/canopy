@@ -92,9 +92,11 @@ type ImportOpts struct {
 
 // Import() imports an encrypted private key to the store
 func (ks *Keystore) Import(encrypted *EncryptedPrivateKey, opts ImportOpts) error {
-	// validate before mutating the keystore
-	if err := ValidateNickname(opts.Nickname); err != nil {
-		return err
+	// validate before mutating the keystore; an empty nickname is allowed (the key simply has no nickname)
+	if opts.Nickname != "" {
+		if err := ValidateNickname(opts.Nickname); err != nil {
+			return err
+		}
 	}
 	// TODO: better naming
 	encrypted.KeyAddress = hex.EncodeToString(opts.Address)
@@ -110,10 +112,13 @@ func (ks *Keystore) Import(encrypted *EncryptedPrivateKey, opts ImportOpts) erro
 		delete(ks.NicknameMap, oldNickname)
 	}
 
-	if _, ok := ks.NicknameMap[opts.Nickname]; ok && opts.Nickname != oldNickname {
-		return errors.New("nickname already used")
+	// only track the nickname -> address mapping when a nickname was provided
+	if opts.Nickname != "" {
+		if _, ok := ks.NicknameMap[opts.Nickname]; ok && opts.Nickname != oldNickname {
+			return errors.New("nickname already used")
+		}
+		ks.NicknameMap[opts.Nickname] = encrypted.KeyAddress
 	}
-	ks.NicknameMap[opts.Nickname] = encrypted.KeyAddress
 
 	ks.AddressMap[encrypted.KeyAddress] = encrypted
 
@@ -129,9 +134,11 @@ func (ks *Keystore) ImportRaw(privateKeyBytes []byte, password string, opts Impo
 	if password == "" {
 		return "", fmt.Errorf("invalid password")
 	}
-	// fail fast before the argon2 encryption cost
-	if err = ValidateNickname(opts.Nickname); err != nil {
-		return "", err
+	// fail fast before the argon2 encryption cost; an empty nickname is allowed
+	if opts.Nickname != "" {
+		if err = ValidateNickname(opts.Nickname); err != nil {
+			return "", err
+		}
 	}
 
 	privateKey, err := NewPrivateKeyFromBytes(privateKeyBytes)
@@ -175,10 +182,10 @@ type GetKeyGroupOpts struct {
 // GetKeyGroup() returns the full keygroup for an address or nickname and decrypts the private key using the password
 func (ks *Keystore) GetKeyGroup(password string, opts GetKeyGroupOpts) (*KeyGroup, error) {
 	var stringAddress string
-	if opts.Address != nil {
+	// an explicit address identifies the key directly; fall back to the nickname only when no address is given
+	if len(opts.Address) != 0 {
 		stringAddress = hex.EncodeToString(opts.Address)
-	}
-	if opts.Nickname != "" {
+	} else if opts.Nickname != "" {
 		stringAddress = ks.NicknameMap[opts.Nickname]
 	}
 
@@ -196,6 +203,103 @@ func (ks *Keystore) GetKeyGroup(password string, opts GetKeyGroupOpts) (*KeyGrou
 	return NewKeyGroup(pk), err
 }
 
+// NicknameEntry is a non-sensitive view of a stored key, safe to list without exposing encrypted material
+type NicknameEntry struct {
+	Address   string `json:"address"`
+	Nickname  string `json:"nickname"`
+	PublicKey string `json:"publicKey"`
+}
+
+// Nicknames() returns a lightweight, non-sensitive map of address -> {address, nickname, publicKey}.
+// It intentionally omits the encrypted private key material so it can cheaply back UI listings/dropdowns.
+func (ks *Keystore) Nicknames() map[string]NicknameEntry {
+	out := make(map[string]NicknameEntry, len(ks.AddressMap))
+	for address, epk := range ks.AddressMap {
+		out[address] = NicknameEntry{
+			Address:   address,
+			Nickname:  epk.KeyNickname,
+			PublicKey: epk.PublicKey,
+		}
+	}
+	return out
+}
+
+// ExportKey() returns a single-key keystore (still encrypted) for an address or nickname,
+// but only after the supplied password is verified by decrypting the key
+func (ks *Keystore) ExportKey(password string, opts GetKeyGroupOpts) (*Keystore, error) {
+	var stringAddress string
+	// an explicit address identifies the key directly; fall back to the nickname only when no address is given
+	if len(opts.Address) != 0 {
+		stringAddress = hex.EncodeToString(opts.Address)
+	} else if opts.Nickname != "" {
+		stringAddress = ks.NicknameMap[opts.Nickname]
+	}
+
+	v := ks.AddressMap[stringAddress]
+	if v == nil {
+		return nil, fmt.Errorf("key not found")
+	}
+	if password == "" {
+		return nil, fmt.Errorf("invalid password")
+	}
+	// verify the password by attempting to decrypt (the decrypted key is discarded)
+	if _, err := DecryptPrivateKey(v, []byte(password)); err != nil {
+		return nil, err
+	}
+
+	// build a keystore containing only the requested key
+	out := NewKeystoreInMemory()
+	out.AddressMap[stringAddress] = v
+	if v.KeyNickname != "" {
+		out.NicknameMap[v.KeyNickname] = stringAddress
+	}
+	return out, nil
+}
+
+type RenameOpts struct {
+	Address     []byte
+	Nickname    string
+	NewNickname string
+}
+
+// UpdateNickname() changes the nickname associated with an existing key (identified by address or current
+// nickname) without touching the encrypted private key material, but only after the password is verified
+func (ks *Keystore) UpdateNickname(password string, opts RenameOpts) error {
+	if err := ValidateNickname(opts.NewNickname); err != nil {
+		return err
+	}
+	var stringAddress string
+	// an explicit address identifies the key directly; fall back to the nickname only when no address is given
+	if len(opts.Address) != 0 {
+		stringAddress = hex.EncodeToString(opts.Address)
+	} else if opts.Nickname != "" {
+		stringAddress = ks.NicknameMap[opts.Nickname]
+	}
+
+	epk := ks.AddressMap[stringAddress]
+	if epk == nil {
+		return fmt.Errorf("key not found")
+	}
+	if password == "" {
+		return fmt.Errorf("invalid password")
+	}
+	// verify the password by attempting to decrypt (the decrypted key is discarded)
+	if _, err := DecryptPrivateKey(epk, []byte(password)); err != nil {
+		return err
+	}
+	// reject if the new nickname is already taken by a different address
+	if existing, ok := ks.NicknameMap[opts.NewNickname]; ok && existing != stringAddress {
+		return errors.New("nickname already used")
+	}
+	// drop the old nickname mapping (if any), then set the new one
+	if epk.KeyNickname != "" {
+		delete(ks.NicknameMap, epk.KeyNickname)
+	}
+	epk.KeyNickname = opts.NewNickname
+	ks.NicknameMap[opts.NewNickname] = stringAddress
+	return nil
+}
+
 type DeleteOpts struct {
 	Address  []byte
 	Nickname string
@@ -204,10 +308,10 @@ type DeleteOpts struct {
 // DeleteKey() removes a private key from the store given an address and/or nickname after validating the password
 func (ks *Keystore) DeleteKey(password string, opts DeleteOpts) error {
 	var stringAddress string
-	if opts.Address != nil {
+	// an explicit address identifies the key directly; fall back to the nickname only when no address is given
+	if len(opts.Address) != 0 {
 		stringAddress = hex.EncodeToString(opts.Address)
-	}
-	if opts.Nickname != "" {
+	} else if opts.Nickname != "" {
 		stringAddress = ks.NicknameMap[opts.Nickname]
 	}
 

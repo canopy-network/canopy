@@ -89,7 +89,7 @@
             "enabled": "{{ form.address || account.address }}"
           }
         },
-        "keystore": {},
+        "keystoreNicknames": {},
         "fees": {},
         "__options": {
           "staleTimeMs": 0,
@@ -99,7 +99,7 @@
             "form.address"
           ],
           "critical": [
-            "keystore"
+            "keystoreNicknames"
           ]
         }
       },
@@ -125,7 +125,7 @@
             "placeholder": "Select From Address",
             "value": "{{account.address}}",
             "autoPopulate": "once",
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
+            "map": "{{ Object.keys(ds.keystoreNicknames || {})?.map(k => ({ label: ds.keystoreNicknames[k].nickname ? (k + ' (' + ds.keystoreNicknames[k].nickname + ')') : k, value: k }))}}",
             "span": {
               "base": 12
             }
@@ -436,7 +436,7 @@
             "enabled": "{{ form.operator }}"
           }
         },
-        "keystore": {},
+        "keystoreNicknames": {},
         "fees": {},
         "__options": {
           "staleTimeMs": 30000,
@@ -448,7 +448,7 @@
             "form.signerResponsible"
           ],
           "critical": [
-            "keystore"
+            "keystoreNicknames"
           ]
         }
       },
@@ -513,7 +513,7 @@
                 "required": "Operator address is required"
               }
             },
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
+            "map": "{{ Object.keys(ds.keystoreNicknames || {})?.map(k => ({ label: ds.keystoreNicknames[k].nickname ? (k + ' (' + ds.keystoreNicknames[k].nickname + ')') : k, value: k }))}}",
             "step": "addresses"
           },
           {
@@ -555,7 +555,7 @@
             },
             "value": "{{ ds.validator ? ds.validator.output : '' }}",
             "autoPopulate": "once",
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
+            "map": "{{ Object.keys(ds.keystoreNicknames || {})?.map(k => ({ label: ds.keystoreNicknames[k].nickname ? (k + ' (' + ds.keystoreNicknames[k].nickname + ')') : k, value: k }))}}",
             "step": "addresses"
           },
           {
@@ -1261,7 +1261,7 @@
             "enabled": "{{ form.validatorAddress || account.address }}"
           }
         },
-        "keystore": {},
+        "keystoreNicknames": {},
         "fees": {
           "account": {
             "address": "{{form.validatorAddress || account.address}}"
@@ -1274,7 +1274,7 @@
             "form.validatorAddress"
           ],
           "critical": [
-            "keystore"
+            "keystoreNicknames"
           ]
         }
       },
@@ -1308,7 +1308,7 @@
             "required": true,
             "value": "{{ params.validatorAddress || '' }}",
             "autoPopulate": "once",
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
+            "map": "{{ Object.keys(ds.keystoreNicknames || {})?.map(k => ({ label: ds.keystoreNicknames[k].nickname ? (k + ' (' + ds.keystoreNicknames[k].nickname + ')') : k, value: k }))}}",
             "help": "The address of the validator to pause",
             "span": {
               "base": 12
@@ -1325,7 +1325,7 @@
             "value": "{{ params.validatorAddress || account.address }}",
             "autoPopulate": "once",
             "required": true,
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
+            "map": "{{ Object.keys(ds.keystoreNicknames || {})?.map(k => ({ label: ds.keystoreNicknames[k].nickname ? (k + ' (' + ds.keystoreNicknames[k].nickname + ')') : k, value: k }))}}",
             "help": "The address that will sign this transaction",
             "span": {
               "base": 12
@@ -1469,7 +1469,7 @@
             "enabled": "{{ form.validatorAddress || account.address }}"
           }
         },
-        "keystore": {},
+        "keystoreNicknames": {},
         "fees": {
           "account": {
             "address": "{{form.validatorAddress || account.address}}"
@@ -1482,7 +1482,7 @@
             "form.validatorAddress"
           ],
           "critical": [
-            "keystore"
+            "keystoreNicknames"
           ]
         }
       },
@@ -1516,7 +1516,7 @@
             "required": true,
             "value": "{{ params.validatorAddress || '' }}",
             "autoPopulate": "once",
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
+            "map": "{{ Object.keys(ds.keystoreNicknames || {})?.map(k => ({ label: ds.keystoreNicknames[k].nickname ? (k + ' (' + ds.keystoreNicknames[k].nickname + ')') : k, value: k }))}}",
             "help": "The address of the validator to unpause",
             "span": {
               "base": 12
@@ -1533,7 +1533,7 @@
             "value": "{{ params.validatorAddress || account.address }}",
             "autoPopulate": "once",
             "required": true,
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
+            "map": "{{ Object.keys(ds.keystoreNicknames || {})?.map(k => ({ label: ds.keystoreNicknames[k].nickname ? (k + ' (' + ds.keystoreNicknames[k].nickname + ')') : k, value: k }))}}",
             "help": "The address that will sign this transaction",
             "span": {
               "base": 12
@@ -1883,7 +1883,7 @@
             "address": "{{account.address}}"
           }
         },
-        "keystore": {},
+        "keystoreNicknames": {},
         "fees": {},
         "__options": {
           "staleTimeMs": 0,
@@ -1917,7 +1917,7 @@
             "required": true,
             "autoPopulate": "once",
             "help": "The address of the validator to unstake",
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
+            "map": "{{ Object.keys(ds.keystoreNicknames || {})?.map(k => ({ label: ds.keystoreNicknames[k].nickname ? (k + ' (' + ds.keystoreNicknames[k].nickname + ')') : k, value: k }))}}",
             "span": {
               "base": 12
             }
@@ -1945,7 +1945,7 @@
             "required": true,
             "autoPopulate": "once",
             "help": "The address that will sign this transaction",
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {})?.map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname +') ' , value: k }))}}",
+            "map": "{{ Object.keys(ds.keystoreNicknames || {})?.map(k => ({ label: ds.keystoreNicknames[k].nickname ? (k + ' (' + ds.keystoreNicknames[k].nickname + ')') : k, value: k }))}}",
             "span": {
               "base": 12
             }
@@ -3003,7 +3003,7 @@
       "icon": "BarChart3",
       "ds": {
         "height": {},
-        "keystore": {},
+        "keystoreNicknames": {},
         "account": {
           "account": {
             "address": "{{account.address}}"
@@ -3034,7 +3034,7 @@
             "required": true,
             "value": "{{account.address}}",
             "autoPopulate": "once",
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "map": "{{ Object.keys(ds.keystoreNicknames || {}).map(k => ({ label: ds.keystoreNicknames[k].nickname ? (k + ' (' + ds.keystoreNicknames[k].nickname + ')') : k, value: k })) }}",
             "span": {
               "base": 12
             }
@@ -3148,7 +3148,7 @@
       "ds": {
         "height": {},
         "gov.poll": {},
-        "keystore": {},
+        "keystoreNicknames": {},
         "account": {
           "account": {
             "address": "{{account.address}}"
@@ -3178,7 +3178,7 @@
             "required": true,
             "value": "{{account.address}}",
             "autoPopulate": "once",
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "map": "{{ Object.keys(ds.keystoreNicknames || {}).map(k => ({ label: ds.keystoreNicknames[k].nickname ? (k + ' (' + ds.keystoreNicknames[k].nickname + ')') : k, value: k })) }}",
             "span": {
               "base": 12
             }
@@ -3325,7 +3325,7 @@
         "height": {},
         "params": {},
         "fees": {},
-        "keystore": {},
+        "keystoreNicknames": {},
         "account": {
           "account": {
             "address": "{{account.address}}"
@@ -3396,7 +3396,7 @@
             "required": true,
             "value": "{{account.address}}",
             "autoPopulate": "once",
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "map": "{{ Object.keys(ds.keystoreNicknames || {}).map(k => ({ label: ds.keystoreNicknames[k].nickname ? (k + ' (' + ds.keystoreNicknames[k].nickname + ')') : k, value: k })) }}",
             "span": {
               "base": 12,
               "md": 6
@@ -3658,7 +3658,7 @@
       "ds": {
         "height": {},
         "fees": {},
-        "keystore": {},
+        "keystoreNicknames": {},
         "account": {
           "account": {
             "address": "{{account.address}}"
@@ -3689,7 +3689,7 @@
             "required": true,
             "value": "{{account.address}}",
             "autoPopulate": "once",
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "map": "{{ Object.keys(ds.keystoreNicknames || {}).map(k => ({ label: ds.keystoreNicknames[k].nickname ? (k + ' (' + ds.keystoreNicknames[k].nickname + ')') : k, value: k })) }}",
             "span": {
               "base": 12
             }
@@ -4155,7 +4155,7 @@
             "enabled": "{{ form.address || account.address }}"
           }
         },
-        "keystore": {},
+        "keystoreNicknames": {},
         "fees": {},
         "params": {},
         "__options": {
@@ -4166,7 +4166,7 @@
           "critical": [
             "admin.config",
             "account",
-            "keystore",
+            "keystoreNicknames",
             "params"
           ]
         }
@@ -4220,7 +4220,7 @@
                 "required": "Seller address is required"
               }
             },
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "map": "{{ Object.keys(ds.keystoreNicknames || {}).map(k => ({ label: ds.keystoreNicknames[k].nickname ? (k + ' (' + ds.keystoreNicknames[k].nickname + ')') : k, value: k })) }}",
             "span": {
               "base": 12
             },
@@ -4239,7 +4239,7 @@
                 "required": "Receive address is required"
               }
             },
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "map": "{{ Object.keys(ds.keystoreNicknames || {}).map(k => ({ label: ds.keystoreNicknames[k].nickname ? (k + ' (' + ds.keystoreNicknames[k].nickname + ')') : k, value: k })) }}",
             "span": {
               "base": 12
             },
@@ -4428,7 +4428,7 @@
       "icon": "Pencil",
       "ds": {
         "admin.config": {},
-        "keystore": {},
+        "keystoreNicknames": {},
         "fees": {},
         "__options": {
           "staleTimeMs": 6000,
@@ -4437,7 +4437,7 @@
           "refetchOnWindowFocus": false,
           "critical": [
             "admin.config",
-            "keystore"
+            "keystoreNicknames"
           ]
         }
       },
@@ -4500,7 +4500,7 @@
                 "required": "Seller address is required"
               }
             },
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "map": "{{ Object.keys(ds.keystoreNicknames || {}).map(k => ({ label: ds.keystoreNicknames[k].nickname ? (k + ' (' + ds.keystoreNicknames[k].nickname + ')') : k, value: k })) }}",
             "span": {
               "base": 12
             },
@@ -4540,7 +4540,7 @@
                 "required": "Receive address is required"
               }
             },
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "map": "{{ Object.keys(ds.keystoreNicknames || {}).map(k => ({ label: ds.keystoreNicknames[k].nickname ? (k + ' (' + ds.keystoreNicknames[k].nickname + ')') : k, value: k })) }}",
             "span": {
               "base": 12
             },
@@ -4740,7 +4740,7 @@
       "icon": "Trash2",
       "ds": {
         "admin.config": {},
-        "keystore": {},
+        "keystoreNicknames": {},
         "fees": {},
         "__options": {
           "staleTimeMs": 6000,
@@ -4749,7 +4749,7 @@
           "refetchOnWindowFocus": false,
           "critical": [
             "admin.config",
-            "keystore"
+            "keystoreNicknames"
           ]
         }
       },
@@ -4795,7 +4795,7 @@
                 "required": "Seller address is required"
               }
             },
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "map": "{{ Object.keys(ds.keystoreNicknames || {}).map(k => ({ label: ds.keystoreNicknames[k].nickname ? (k + ' (' + ds.keystoreNicknames[k].nickname + ')') : k, value: k })) }}",
             "span": {
               "base": 12
             }
@@ -4929,7 +4929,7 @@
       "title": "Lock Order",
       "icon": "Lock",
       "ds": {
-        "keystore": {},
+        "keystoreNicknames": {},
         "params": {},
         "fees": {},
         "__options": {
@@ -4938,7 +4938,7 @@
           "refetchOnMount": true,
           "refetchOnWindowFocus": false,
           "critical": [
-            "keystore",
+            "keystoreNicknames",
             "params"
           ]
         }
@@ -4985,7 +4985,7 @@
                 "required": "Buyer address is required"
               }
             },
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "map": "{{ Object.keys(ds.keystoreNicknames || {}).map(k => ({ label: ds.keystoreNicknames[k].nickname ? (k + ' (' + ds.keystoreNicknames[k].nickname + ')') : k, value: k })) }}",
             "span": {
               "base": 12
             }
@@ -5005,7 +5005,7 @@
                 "required": "Receive address is required"
               }
             },
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "map": "{{ Object.keys(ds.keystoreNicknames || {}).map(k => ({ label: ds.keystoreNicknames[k].nickname ? (k + ' (' + ds.keystoreNicknames[k].nickname + ')') : k, value: k })) }}",
             "span": {
               "base": 12
             }
@@ -5115,7 +5115,7 @@
       "title": "Close Order",
       "icon": "CheckCircle2",
       "ds": {
-        "keystore": {},
+        "keystoreNicknames": {},
         "params": {},
         "fees": {},
         "__options": {
@@ -5124,7 +5124,7 @@
           "refetchOnMount": true,
           "refetchOnWindowFocus": false,
           "critical": [
-            "keystore",
+            "keystoreNicknames",
             "params"
           ]
         }
@@ -5171,7 +5171,7 @@
                 "required": "Buyer address is required"
               }
             },
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "map": "{{ Object.keys(ds.keystoreNicknames || {}).map(k => ({ label: ds.keystoreNicknames[k].nickname ? (k + ' (' + ds.keystoreNicknames[k].nickname + ')') : k, value: k })) }}",
             "span": {
               "base": 12
             }
@@ -5274,7 +5274,7 @@
       "icon": "ArrowLeftRight",
       "ds": {
         "admin.config": {},
-        "keystore": {},
+        "keystoreNicknames": {},
         "fees": {},
         "__options": {
           "staleTimeMs": 6000,
@@ -5283,7 +5283,7 @@
           "refetchOnWindowFocus": false,
           "critical": [
             "admin.config",
-            "keystore"
+            "keystoreNicknames"
           ]
         }
       },
@@ -5329,7 +5329,7 @@
                 "required": "Address is required"
               }
             },
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "map": "{{ Object.keys(ds.keystoreNicknames || {}).map(k => ({ label: ds.keystoreNicknames[k].nickname ? (k + ' (' + ds.keystoreNicknames[k].nickname + ')') : k, value: k })) }}",
             "span": {
               "base": 12
             }
@@ -5489,7 +5489,7 @@
       "icon": "Droplets",
       "ds": {
         "admin.config": {},
-        "keystore": {},
+        "keystoreNicknames": {},
         "fees": {},
         "__options": {
           "staleTimeMs": 6000,
@@ -5498,7 +5498,7 @@
           "refetchOnWindowFocus": false,
           "critical": [
             "admin.config",
-            "keystore"
+            "keystoreNicknames"
           ]
         }
       },
@@ -5544,7 +5544,7 @@
                 "required": "Address is required"
               }
             },
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "map": "{{ Object.keys(ds.keystoreNicknames || {}).map(k => ({ label: ds.keystoreNicknames[k].nickname ? (k + ' (' + ds.keystoreNicknames[k].nickname + ')') : k, value: k })) }}",
             "span": {
               "base": 12
             }
@@ -5679,7 +5679,7 @@
       "icon": "CircleDashed",
       "ds": {
         "admin.config": {},
-        "keystore": {},
+        "keystoreNicknames": {},
         "fees": {},
         "__options": {
           "staleTimeMs": 6000,
@@ -5688,7 +5688,7 @@
           "refetchOnWindowFocus": false,
           "critical": [
             "admin.config",
-            "keystore"
+            "keystoreNicknames"
           ]
         }
       },
@@ -5734,7 +5734,7 @@
                 "required": "Address is required"
               }
             },
-            "map": "{{ Object.keys(ds.keystore?.addressMap || {}).map(k => ({ label: k + ' (' + ds.keystore.addressMap[k].keyNickname + ')', value: k })) }}",
+            "map": "{{ Object.keys(ds.keystoreNicknames || {}).map(k => ({ label: ds.keystoreNicknames[k].nickname ? (k + ' (' + ds.keystoreNicknames[k].nickname + ')') : k, value: k })) }}",
             "span": {
               "base": 12
             }
