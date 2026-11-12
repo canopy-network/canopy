@@ -8,7 +8,7 @@ import (
 
 // SoftwareVersion is the running Canopy software version. It follows golang's
 // semver naming convention (https://pkg.go.dev/golang.org/x/mod/semver).
-const SoftwareVersion = "v0.1.31+beta"
+const SoftwareVersion = "v0.1.33+beta"
 
 // IsValidVersion reports whether version is valid semver, accepting an optional
 // leading "v". Shared so the release script and auto-updater validate alike.
