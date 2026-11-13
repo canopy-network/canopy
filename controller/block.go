@@ -337,8 +337,8 @@ func (c *Controller) CommitCertificate(qc *lib.QuorumCertificate, block *lib.Blo
 		// reset mempool FSM
 		c.Mempool.FSM.Reset()
 	}
-	// update telemetry (using proper defer to ensure time.Since is evaluated at defer execution)
-	defer c.UpdateTelemetry(qc, block, time.Since(start))
+	// update telemetry at return time so the duration includes all commit work
+	defer func() { c.UpdateTelemetry(qc, block, time.Since(start)) }()
 	if !syncing {
 		// publish root chain information to all nested chain subscribers
 		for _, id := range c.RCManager.ChainIds() {
