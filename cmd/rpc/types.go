@@ -93,7 +93,8 @@ type keystoreRequest struct {
 	addressRequest
 	passwordRequest
 	nicknameRequest
-	PrivateKey lib.HexBytes `json:"privateKey"`
+	PrivateKey  lib.HexBytes `json:"privateKey"`
+	NewNickname string       `json:"newNickname"`
 	crypto.EncryptedPrivateKey
 }
 

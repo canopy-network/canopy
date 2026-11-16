@@ -149,14 +149,35 @@ func TestKeystoreImportRejectsInvalidNickname(t *testing.T) {
 	encrypted, err := EncryptPrivateKey(private.PublicKey().Bytes(), private.Bytes(), []byte(password), private.PublicKey().Address().String())
 	require.NoError(t, err)
 	ks := NewKeystoreInMemory()
-	// both import paths must reject and leave the keystore untouched
+	// both import paths must reject malformed (non-empty) nicknames and leave the keystore untouched
 	require.Error(t, ks.Import(encrypted, ImportOpts{Address: address, Nickname: "../validator_key.json"}))
 	_, err = ks.ImportRaw(private.Bytes(), password, ImportRawOpts{Nickname: "../../../etc/cron.d/p"})
 	require.Error(t, err)
-	require.Error(t, ks.Import(encrypted, ImportOpts{Address: address}))
-	_, err = ks.ImportRaw(private.Bytes(), password, ImportRawOpts{})
-	require.Error(t, err)
 	require.Empty(t, ks.AddressMap)
+	require.Empty(t, ks.NicknameMap)
+}
+
+func TestKeystoreImportAllowsEmptyNickname(t *testing.T) {
+	password := "password"
+	private, err := NewBLS12381PrivateKey()
+	require.NoError(t, err)
+	address := private.PublicKey().Address().Bytes()
+	encrypted, err := EncryptPrivateKey(private.PublicKey().Bytes(), private.Bytes(), []byte(password), private.PublicKey().Address().String())
+	require.NoError(t, err)
+
+	// a key may be imported/created without a nickname via either path
+	ks := NewKeystoreInMemory()
+	require.NoError(t, ks.Import(encrypted, ImportOpts{Address: address}))
+	// the key is stored by address, but an empty nickname never pollutes the nickname map
+	require.Len(t, ks.AddressMap, 1)
+	require.Empty(t, ks.NicknameMap)
+	require.Equal(t, "", ks.AddressMap[hex.EncodeToString(address)].KeyNickname)
+
+	ks = NewKeystoreInMemory()
+	gotAddress, err := ks.ImportRaw(private.Bytes(), password, ImportRawOpts{})
+	require.NoError(t, err)
+	require.Equal(t, hex.EncodeToString(address), gotAddress)
+	require.Len(t, ks.AddressMap, 1)
 	require.Empty(t, ks.NicknameMap)
 }
 
