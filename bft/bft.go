@@ -201,7 +201,7 @@ func (b *BFT) HandlePhase() {
 	}
 	// if not a validator, wait until the next block to check if became a validator
 	if !b.SelfIsValidator() {
-		b.log.Info("Not currently a validator, waiting for a new block")
+		b.log.Infof("Not in the committee for active root height %d, waiting for a new block", b.RootHeight)
 		stopTimers()
 		return
 	}
