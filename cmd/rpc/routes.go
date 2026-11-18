@@ -68,12 +68,14 @@ const (
 	// eth
 	EthereumRoutePath = "/v1/eth"
 	// admin
-	KeystoreRoutePath          = "/v1/admin/keystore"
 	KeystoreNewKeyRoutePath    = "/v1/admin/keystore-new-key"
 	KeystoreImportRoutePath    = "/v1/admin/keystore-import"
 	KeystoreImportRawRoutePath = "/v1/admin/keystore-import-raw"
 	KeystoreDeleteRoutePath    = "/v1/admin/keystore-delete"
 	KeystoreGetRoutePath       = "/v1/admin/keystore-get"
+	KeystoreNicknamesRoutePath = "/v1/admin/keystore-nicknames"
+	KeystoreExportRoutePath    = "/v1/admin/keystore-export"
+	KeystoreRenameRoutePath    = "/v1/admin/keystore-rename"
 	TxSendRoutePath            = "/v1/admin/tx-send"
 	TxSendVestingRoutePath     = "/v1/admin/tx-send-vesting"
 	TxStakeRoutePath           = "/v1/admin/tx-stake"
@@ -170,12 +172,14 @@ const (
 	// eth
 	EthereumRouteName = "eth"
 	// admin
-	KeystoreRouteName               = "keystore"
 	KeystoreNewKeyRouteName         = "keystore-new-key"
 	KeystoreImportRouteName         = "keystore-import"
 	KeystoreImportRawRouteName      = "keystore-import-raw"
 	KeystoreDeleteRouteName         = "keystore-delete"
 	KeystoreGetRouteName            = "keystore-get"
+	KeystoreNicknamesRouteName      = "keystore-nicknames"
+	KeystoreExportRouteName         = "keystore-export"
+	KeystoreRenameRouteName         = "keystore-rename"
 	TxSendRouteName                 = "tx-send"
 	TxSendVestingRouteName          = "tx-send-vesting"
 	TxStakeRouteName                = "tx-stake"
@@ -275,12 +279,14 @@ var routePaths = routes{
 	// eth
 	EthereumRouteName: {Method: http.MethodPost, Path: EthereumRoutePath},
 	// admin
-	KeystoreRouteName:               {Method: http.MethodGet, Path: KeystoreRoutePath},
 	KeystoreNewKeyRouteName:         {Method: http.MethodPost, Path: KeystoreNewKeyRoutePath},
 	KeystoreImportRouteName:         {Method: http.MethodPost, Path: KeystoreImportRoutePath},
 	KeystoreImportRawRouteName:      {Method: http.MethodPost, Path: KeystoreImportRawRoutePath},
 	KeystoreDeleteRouteName:         {Method: http.MethodPost, Path: KeystoreDeleteRoutePath},
 	KeystoreGetRouteName:            {Method: http.MethodPost, Path: KeystoreGetRoutePath},
+	KeystoreNicknamesRouteName:      {Method: http.MethodGet, Path: KeystoreNicknamesRoutePath},
+	KeystoreExportRouteName:         {Method: http.MethodPost, Path: KeystoreExportRoutePath},
+	KeystoreRenameRouteName:         {Method: http.MethodPost, Path: KeystoreRenameRoutePath},
 	TxSendRouteName:                 {Method: http.MethodPost, Path: TxSendRoutePath},
 	TxSendVestingRouteName:          {Method: http.MethodPost, Path: TxSendVestingRoutePath},
 	TxStakeRouteName:                {Method: http.MethodPost, Path: TxStakeRoutePath},
@@ -396,12 +402,14 @@ func createRouter(s *Server) *httprouter.Router {
 // createRouter initializes and returns a new HTTP router with predefined route handlers.
 func createAdminRouter(s *Server) *httprouter.Router {
 	var r = httpRouteHandlers{
-		KeystoreRouteName:               s.Keystore,
 		KeystoreNewKeyRouteName:         s.KeystoreNewKey,
 		KeystoreImportRouteName:         s.KeystoreImport,
 		KeystoreImportRawRouteName:      s.KeystoreImportRaw,
 		KeystoreDeleteRouteName:         s.KeystoreDelete,
 		KeystoreGetRouteName:            s.KeystoreGetKeyGroup,
+		KeystoreNicknamesRouteName:      s.KeystoreNicknames,
+		KeystoreExportRouteName:         s.KeystoreExport,
+		KeystoreRenameRouteName:         s.KeystoreRename,
 		TxSendRouteName:                 s.TransactionSend,
 		TxSendVestingRouteName:          s.TransactionSendVesting,
 		TxStakeRouteName:                s.TransactionStake,
