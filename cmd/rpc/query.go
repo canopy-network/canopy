@@ -3,6 +3,7 @@ package rpc
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -526,6 +527,11 @@ func (s *Server) State(w http.ResponseWriter, r *http.Request, _ httprouter.Para
 func (s *Server) Proof(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	req := new(proofRequest)
 	if ok := unmarshal(w, r, req); !ok {
+		return
+	}
+	// validate the untrusted key is well-formed before the store layer, else a corrupt key panics in decoding
+	if _, ok := lib.DecodeLengthPrefixedSafe(req.Key); !ok {
+		write(w, lib.ErrInvalidParams(errors.New("corrupt or incomplete key")), http.StatusBadRequest)
 		return
 	}
 	// create a fresh, read-only store view (never the live consensus store) to generate the proof
