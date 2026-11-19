@@ -29,8 +29,11 @@ type PluginCompatibleFSM interface {
 // queries from the plugin. Unlike PluginCompatibleFSM, these queries are not tied to an
 // in-flight tx/block lifecycle and operate against a historical read-only snapshot of state.
 type PluginQueryProvider interface {
-	// QueryState() executes a 'read request' against a read-only state snapshot at the given height (0 = latest committed)
-	QueryState(height uint64, request *PluginStateReadRequest) (response PluginStateReadResponse, err ErrorI)
+	// QueryState() executes a 'read request' against a read-only state snapshot at the given height
+	// (0 = latest committed). It also returns the state commitment root and the concrete height the
+	// query resolved to, so that any merkle proofs included in the response can be verified against an
+	// independently authenticated root at a known height.
+	QueryState(height uint64, request *PluginStateReadRequest) (response PluginStateReadResponse, stateRoot []byte, resolvedHeight uint64, err ErrorI)
 }
 
 // Plugin defines the 'VM-less' extension of the Finite State Machine
@@ -43,21 +46,23 @@ type Plugin struct {
 	l             sync.Mutex                            // thread safety
 	log           LoggerI                               // the logger associated with the plugin
 	timeout       time.Duration                         // plugin request timeout
+	pluginConfig  []byte                                // opaque `pluginConfig` JSON from the node config, forwarded to the plugin at handshake
 }
 
 // NewPlugin() creates and starts a plguin
-func NewPlugin(conn net.Conn, log LoggerI, timeout time.Duration) (p *Plugin) {
+func NewPlugin(conn net.Conn, log LoggerI, timeout time.Duration, pluginConfig []byte) (p *Plugin) {
 	if timeout <= 0 {
 		timeout = time.Second
 	}
 	// constructs the new plugin
 	p = &Plugin{
-		conn:        conn,
-		pending:     map[uint64]chan isPluginToFSM_Payload{},
-		requestFSMs: map[uint64]PluginCompatibleFSM{},
-		l:           sync.Mutex{},
-		log:         log,
-		timeout:     timeout,
+		conn:         conn,
+		pending:      map[uint64]chan isPluginToFSM_Payload{},
+		requestFSMs:  map[uint64]PluginCompatibleFSM{},
+		l:            sync.Mutex{},
+		log:          log,
+		timeout:      timeout,
+		pluginConfig: pluginConfig,
 	}
 	// debug log plugin creation
 	log.Debugf("Creating new plugin with connection: %s", conn.RemoteAddr())
@@ -322,10 +327,11 @@ func (p *Plugin) handleConfigMessage(msg *PluginToFSM) ErrorI {
 		p.log.Debugf("handleConfigMessage() failed to Register plugin schema: %v", err)
 		return err
 	}
-	// ack the config - send FSMToPlugin config response
+	// ack the config - send FSMToPlugin config response, forwarding the opaque node-supplied
+	// `pluginConfig` JSON so the plugin can decode + validate it into its own expected shape
 	response := &FSMToPlugin{
 		Id:      msg.Id,
-		Payload: &FSMToPlugin_Config{Config: &PluginFSMConfig{Config: m.Config}},
+		Payload: &FSMToPlugin_Config{Config: &PluginFSMConfig{Config: m.Config, PluginConfig: p.pluginConfig}},
 	}
 	// debug log sending response
 	p.log.Debugf("handleConfigMessage() sending config acknowledgment for message ID %d", msg.Id)
@@ -438,13 +444,16 @@ func (p *Plugin) handleQueryRequest(msg *PluginToFSM) ErrorI {
 		response.Error = NewPluginError(ErrNilPluginQueryRead())
 	} else {
 		// execute the detached read-only query
-		read, err := provider.QueryState(request.GetHeight(), request.GetRead())
+		read, stateRoot, resolvedHeight, err := provider.QueryState(request.GetHeight(), request.GetRead())
 		if err != nil {
 			p.log.Debugf("handleQueryRequest() query provider error: %v", err)
 			response.Error = NewPluginError(err)
 		} else {
 			p.log.Debugf("handleQueryRequest() query provider success: %+v", read)
 			response.Read = &read
+			// surface the snapshot's root + resolved height so proofs in 'read' can be verified
+			response.StateRoot = stateRoot
+			response.Height = resolvedHeight
 		}
 	}
 	// send response back to the plugin

@@ -164,6 +164,8 @@ message FeeParams {
   uint64 dex_liquidity_deposit_fee = 15; // @gotags: json:"dexLiquidityDeposit"
   // dex_liquidity_withdraw: is the fee amount (in uCNPY) for Message Dex Liquidity Withdraw
   uint64 dex_liquidity_withdraw_fee = 16; // @gotags: json:"dexLiquidityWithdraw"
+  // change_byzantine_output_fee: is the fee amount (in uCNPY) for Message Change Byzantine Output
+  uint64 change_byzantine_output_fee = 17; // @gotags: json:"changeByzantineOutputFee"
 }
 
 // GovernanceParams is the parameter space that define the rules that enable decentralized and autonomous

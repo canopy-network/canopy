@@ -28,6 +28,7 @@ type Plugin struct {
 	requestContract map[uint64]*Contract                  // maps request IDs to their contract context for concurrent operations
 	l               sync.Mutex                            // thread safety
 	config          Config                                // general app config
+	Settings        *PluginSettings                       // the typed, validated form of the opaque pluginConfig (set at handshake)
 }
 
 // socketPath is the name of the plugin socket exposed by the base SDK
@@ -90,9 +91,17 @@ func (p *Plugin) Handshake() *PluginError {
 	if !ok {
 		return ErrUnexpectedFSMToPlugin(reflect.TypeOf(response))
 	}
-	// set pluginConfig
+	// set the fsm config
 	p.fsmConfig = wrapper.Config
-	// handshake conmplete
+	// decode + validate the opaque pluginConfig the node forwarded from its config.json. This is the
+	// 'expected form' check: a malformed blob fails the handshake (and StartPlugin log.Fatals on it).
+	settings, pErr := ParsePluginConfig(wrapper.Config.GetPluginConfig())
+	if pErr != nil {
+		return pErr
+	}
+	p.Settings = settings
+	log.Printf("Loaded pluginConfig: faucetAmount=%d", settings.FaucetAmount)
+	// handshake complete
 	return nil
 }
 
@@ -147,6 +156,59 @@ func (p *Plugin) QueryState(height uint64, request *PluginStateReadRequest) (*Pl
 	}
 	// return the unwrapped read response
 	return wrapper.Query.GetRead(), nil
+}
+
+// StateProof is the result of a detached single-key query that also carries a sparse-merkle-tree
+// proof. Everything here (except StateRoot, which the caller authenticates independently via the
+// quorum certificate) is self-verifying: a client feeds Value/Exists/Proof to a verifier and checks
+// the reconstructed root equals StateRoot — so a lying RPC node can be caught, never trusted blindly.
+type StateProof struct {
+	// Value is the raw committed value at the key (empty when the key does not exist)
+	Value []byte
+	// Exists reports whether the key currently holds a non-empty value (membership vs non-membership)
+	Exists bool
+	// Proof is the membership (Exists) or non-membership (!Exists) proof for the key
+	Proof []*ProofNode
+	// StateRoot is the state commitment root the proof commits to (authenticate it independently)
+	StateRoot []byte
+	// Height is the concrete committed height the query resolved at (useful when height=0 was requested)
+	Height uint64
+}
+
+// QueryStateWithProof() executes a detached, read-only single-key query at the given height
+// (0 = latest committed) and asks the FSM for a sparse-merkle-tree membership/non-membership proof
+// over the same socket (prove=true). It returns the value, whether the key exists, the proof, and the
+// state root + resolved height the proof commits to — everything an untrusted client needs to verify
+// the answer against a root it authenticated independently (no separate RPC round-trip required).
+func (p *Plugin) QueryStateWithProof(height uint64, key []byte) (*StateProof, *PluginError) {
+	// send a detached single-key read with prove=true
+	response, err := p.sendDetachedSync(&PluginToFSM_Query{Query: &PluginQueryRequest{
+		Height: height,
+		Read:   &PluginStateReadRequest{Keys: []*PluginKeyRead{{QueryId: rand.Uint64(), Key: key, Prove: true}}},
+	}})
+	if err != nil {
+		return nil, err
+	}
+	// unwrap the query response
+	wrapper, ok := response.(*FSMToPlugin_Query)
+	if !ok || wrapper.Query == nil {
+		return nil, ErrUnexpectedFSMToPlugin(reflect.TypeOf(response))
+	}
+	// surface any FSM-side error
+	if wrapper.Query.Error != nil {
+		return nil, wrapper.Query.Error
+	}
+	// the root + resolved height apply to the whole response
+	out := &StateProof{StateRoot: wrapper.Query.StateRoot, Height: wrapper.Query.Height}
+	// pull the single key's result (value, existence, and proof)
+	if read := wrapper.Query.GetRead(); read != nil && len(read.Results) > 0 {
+		res := read.Results[0]
+		out.Exists, out.Proof = res.Exists, res.Proof
+		if len(res.Entries) > 0 {
+			out.Value = res.Entries[0].Value
+		}
+	}
+	return out, nil
 }
 
 // ListenForInbound() routes inbound requests from the plugin
@@ -439,6 +501,36 @@ type Config struct {
 	DataDirPath string `json:"dataDirPath"`
 	// RPCAddress is the listen address for the plugin's own HTTP server that exposes custom RPC endpoints
 	RPCAddress string `json:"rpcAddress"`
+	// PluginConfig is an opaque, plugin-defined configuration value (any JSON). It mirrors the node
+	// config.json `pluginConfig` field; Canopy forwards that value to the plugin at handshake, and the
+	// plugin decodes + validates it into its own expected shape (see PluginSettings) at startup.
+	PluginConfig any `json:"pluginConfig"`
+}
+
+// PluginSettings is the typed, validated shape the plugin expects the opaque `pluginConfig` to take.
+// Keeping `pluginConfig` as `any` on the wire lets each plugin define its own schema while still
+// failing fast at startup if the operator supplied something malformed.
+type PluginSettings struct {
+	// FaucetAmount is the fixed amount (in uCNPY) minted per faucet transaction. It is operator
+	// controlled via config.json `pluginConfig.faucetAmount` rather than being supplied per request
+	// over RPC, so the node operator — not the caller — decides how much the faucet dispenses.
+	FaucetAmount uint64 `json:"faucetAmount"`
+}
+
+// ParsePluginConfig() decodes the opaque pluginConfig (raw JSON forwarded from the node's config.json)
+// into the plugin's expected PluginSettings shape and validates it. This is the single place where the
+// plugin asserts the operator-supplied blob is "in the expected form"; it is called once at startup.
+func ParsePluginConfig(raw []byte) (*PluginSettings, *PluginError) {
+	settings := new(PluginSettings)
+	// a missing pluginConfig is treated as empty settings so the base plugin still starts
+	if len(raw) == 0 {
+		return settings, nil
+	}
+	// the blob must be a well-formed JSON object matching PluginSettings
+	if err := json.Unmarshal(raw, settings); err != nil {
+		return nil, ErrInvalidPluginConfig(err.Error())
+	}
+	return settings, nil
 }
 
 // DefaultConfig() returns the default configuration

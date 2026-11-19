@@ -15,8 +15,17 @@ export const NewKey = ({ embedded = false, onSuccess }: { embedded?: boolean; on
 
     const [newKeyForm, setNewKeyForm] = useState({
         password: '',
+        confirmPassword: '',
         walletName: ''
     });
+
+    const invalidateAccounts = () =>
+        queryClient.invalidateQueries({
+            predicate: (query) =>
+                Array.isArray(query.queryKey) &&
+                query.queryKey[0] === 'ds' &&
+                query.queryKey[2] === 'keystoreNicknames',
+        });
 
     const panelVariants = {
         hidden: { opacity: 0, y: 20 },
@@ -28,13 +37,13 @@ export const NewKey = ({ embedded = false, onSuccess }: { embedded?: boolean; on
     };
 
     const handleCreateWallet = async () => {
-        if (!newKeyForm.walletName) {
-            toast.error({ title: 'Missing wallet name', description: 'Please enter a wallet name.' });
+        if (!newKeyForm.password) {
+            toast.error({ title: 'Missing password', description: 'Please enter a password.' });
             return;
         }
 
-        if (!newKeyForm.password) {
-            toast.error({ title: 'Missing password', description: 'Please enter a password.' });
+        if (newKeyForm.password !== newKeyForm.confirmPassword) {
+            toast.error({ title: 'Password mismatch', description: 'Passwords do not match.' });
             return;
         }
 
@@ -50,21 +59,23 @@ export const NewKey = ({ embedded = false, onSuccess }: { embedded?: boolean; on
                 password: newKeyForm.password
             });
 
-            await queryClient.invalidateQueries({ queryKey: ['ds', 'keystore'] });
+            await invalidateAccounts();
 
             toast.dismiss(loadingToast);
             toast.success({
                 title: 'Wallet created',
-                description: `Wallet "${newKeyForm.walletName}" is ready.`,
+                description: newKeyForm.walletName
+                    ? `Wallet "${newKeyForm.walletName}" is ready.`
+                    : 'Your new wallet is ready.',
             });
 
-            setNewKeyForm({ password: '', walletName: '' });
+            setNewKeyForm({ password: '', confirmPassword: '', walletName: '' });
             onSuccess?.();
 
             const newAddress = typeof response === 'string' ? response : (response as any)?.address;
             if (newAddress) {
                 setTimeout(() => {
-                    queryClient.invalidateQueries({ queryKey: ['ds', 'keystore'] });
+                    void invalidateAccounts();
                 }, 500);
             }
         } catch (error) {
@@ -89,7 +100,7 @@ export const NewKey = ({ embedded = false, onSuccess }: { embedded?: boolean; on
                 <div className="space-y-5">
                     <div>
                         <label className="mb-2 block text-sm font-medium text-foreground/80">
-                            Wallet Name
+                            Wallet Name <span className="text-muted-foreground font-normal">(optional)</span>
                         </label>
                         <input
                             type="text"
@@ -108,6 +119,18 @@ export const NewKey = ({ embedded = false, onSuccess }: { embedded?: boolean; on
                             placeholder="Password"
                             value={newKeyForm.password}
                             onChange={(e) => setNewKeyForm({ ...newKeyForm, password: e.target.value })}
+                            className="w-full rounded-lg border border-border bg-muted px-3 py-2.5 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+                        />
+                    </div>
+                    <div>
+                        <label className="mb-2 block text-sm font-medium text-foreground/80">
+                            Confirm Password
+                        </label>
+                        <input
+                            type="password"
+                            placeholder="Confirm your password...."
+                            value={newKeyForm.confirmPassword}
+                            onChange={(e) => setNewKeyForm({ ...newKeyForm, confirmPassword: e.target.value })}
                             className="w-full rounded-lg border border-border bg-muted px-3 py-2.5 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
                         />
                     </div>

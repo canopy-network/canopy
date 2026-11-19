@@ -9,6 +9,7 @@ export {
 } from './contract.js';
 export {
     Plugin,
+    StateProof,
     Config,
     DefaultConfig,
     NewConfigFromFile,

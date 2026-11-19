@@ -43,6 +43,7 @@ from .plugin_pb2 import (  # type: ignore[attr-defined]
     PluginSetOp,
     PluginDeleteOp,
     PluginStateEntry,
+    ProofNode,
 )
 
 __all__ = [
@@ -88,4 +89,5 @@ __all__ = [
     "PluginSetOp",
     "PluginDeleteOp",
     "PluginStateEntry",
+    "ProofNode",
 ]

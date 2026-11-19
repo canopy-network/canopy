@@ -26,7 +26,7 @@ const ChainStatus: React.FC<ChainStatusProps> = ({ metrics, loading, paramsData 
         const feeKeys = [
             'sendFee', 'stakeFee', 'editStakeFee', 'unstakeFee',
             'pauseFee', 'unpauseFee', 'changeParameterFee',
-            'daoTransferFee', 'certificateResultsFee', 'subsidyFee',
+            'daoTransferFee', 'changeByzantineOutputFee', 'certificateResultsFee', 'subsidyFee',
             'createOrderFee', 'editOrderFee', 'deleteOrderFee',
         ]
         const fees = feeKeys

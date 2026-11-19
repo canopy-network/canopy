@@ -4,16 +4,13 @@ import React, { createContext, useCallback, useContext, useMemo } from 'react'
 import { useDS } from "@/core/useDs"
 import { useDSFetcher } from "@/core/dsFetch"
 
-type KeystoreResponse = {
-    addressMap: Record<string, {
-        publicKey: string
-        salt: string
-        encrypted: string
-        keyAddress: string
-        keyNickname: string
-    }>
-    nicknameMap: Record<string, string>
-}
+// Lightweight, non-sensitive account listing returned by the `keystoreNicknames` endpoint.
+// Keyed by address; intentionally omits any encrypted private key material.
+type NicknamesResponse = Record<string, {
+    address: string
+    nickname: string
+    publicKey: string
+}>
 
 export type Account = {
     id: string
@@ -37,17 +34,17 @@ const AccountsListContext = createContext<AccountsListContextValue | undefined>(
 
 export function AccountsListProvider({ children }: { children: React.ReactNode }) {
     const { data: ks, isLoading, isFetching, error, refetch, isFetched } =
-        useDS<KeystoreResponse>('keystore', {}, { refetchIntervalMs: 30 * 1000 })
+        useDS<NicknamesResponse>('keystoreNicknames', {}, { refetchIntervalMs: 30 * 1000 })
 
     const dsFetch = useDSFetcher()
 
     const accounts: Account[] = useMemo(() => {
-        const map = ks?.addressMap ?? {}
+        const map: NicknamesResponse = ks ?? {}
         return Object.entries(map).map(([address, entry]) => ({
             id: address,
             address,
-            nickname: (entry as any).keyNickname || `Account ${address.slice(0, 8)}...`,
-            publicKey: (entry as any).publicKey ?? (entry as any).public_key ?? '',
+            nickname: entry.nickname || `Account ${address.slice(0, 8)}...`,
+            publicKey: entry.publicKey ?? '',
         }))
     }, [ks])
 

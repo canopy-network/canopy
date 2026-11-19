@@ -38,13 +38,13 @@ message MessageReward {
 
 // MessageFaucet is a test-only transaction that mints tokens to any address
 // No balance check required - just mints tokens for testing purposes
+// NOTE: there is intentionally NO `amount` field. The minted amount is operator-controlled via
+// config.json `pluginConfig.faucetAmount` (see Step 7b), not supplied per-transaction over RPC.
 message MessageFaucet {
   // signer_address: the address signing this transaction (for auth)
   bytes signer_address = 1; // @gotags: json:"signerAddress"
   // recipient_address: who receives the tokens
   bytes recipient_address = 2; // @gotags: json:"recipientAddress"
-  // amount: tokens to mint
-  uint64 amount = 3;
 }
 ```
 
@@ -147,14 +147,8 @@ private fun checkMessageFaucet(msg: MessageFaucet): PluginCheckResponse {
             .build()
     }
 
-    // Validate amount - must be greater than zero.
-    // Zero-amount transactions are meaningless and waste block space.
-    // Note: Kotlin uses 0L for Long literal comparison.
-    if (msg.amount == 0L) {
-        return PluginCheckResponse.newBuilder()
-            .setError(ErrInvalidAmount().toProto())
-            .build()
-    }
+    // NOTE: there is no amount to validate here — the faucet mints a fixed, operator-controlled
+    // amount (pluginConfig.faucetAmount), which is validated once at startup (see Step 7b).
 
     // Build and return the successful check response:
     // - recipient: who receives funds (used for indexing/notifications)
@@ -303,8 +297,11 @@ private fun deliverMessageFaucet(msg: MessageFaucet): PluginDeliverResponse {
     // CORE LOGIC: Create updated recipient with minted tokens added.
     // Protobuf objects are immutable, so we use toBuilder() to create a modified copy.
     // This is where tokens are "minted" - we simply increase the balance.
+    // The amount is NOT taken from the message; it comes from the operator-controlled
+    // pluginConfig.faucetAmount, decoded + validated once at startup (see Step 7b).
+    val faucetAmount = plugin.settings.faucetAmount
     val newRecipient = recipient.toBuilder()
-        .setAmount(recipient.amount + msg.amount)
+        .setAmount(recipient.amount + faucetAmount)
         .build()
 
     // Build and send a state write request to persist the new balance.
@@ -493,11 +490,63 @@ fun start() {
 Then add the `handleQueryFaucets` / `handleQueryRewards` handlers (and the JSON/hex helpers) to `Rpc.kt`. Each handler calls the detached, read-only `queryState`:
 
 - Without `?address`, it does a **range read** over the record prefix (`faucetPrefix()` / `rewardPrefix()`) and returns every record.
-- With `?address=<hex>`, it does a **single-key read** (`keyForFaucet(addr)` / `keyForReward(addr)`) and returns just that recipient's record.
+- With `?address=<hex>`, it does a **single-key read** (`keyForFaucet(addr)` / `keyForReward(addr)`) and returns just that recipient's record — together with a verifiable merkle proof (see below).
 
 > **Important — the range prefix must be length-prefixed.** Stored keys are length-prefixed (`keyForFaucet(addr)` = `joinLenPrefix(FAUCET_PREFIX, addr)`), so the prefix you pass to a **range read** must be length-prefixed too — that's exactly what `faucetPrefix()` returns (`joinLenPrefix(FAUCET_PREFIX)`, i.e. `byteArrayOf(0x01, 0x64)`), **not** the raw `byteArrayOf(0x64)`. Passing the raw prefix byte misaligns Canopy's length-prefixed iterator and crashes the node with `panic: corrupt or incomplete key`. (Single-key reads via `keyForFaucet(addr)` are already length-prefixed, so they're unaffected.)
 
 The listen address comes from the `rpcAddress` config field (default `0.0.0.0:50010`). The RPC server is optional and non-fatal: set `rpcAddress` to empty to disable it, and a bind failure (e.g. port already in use) is logged without crashing the plugin.
+
+### Return a verifiable proof (recommended)
+
+A plain `queryState` answer is only as trustworthy as the node that served it. The same socket can return a sparse-merkle-tree **proof** alongside the value, plus the `stateRoot` and `height` it was read at. A client authenticates the state root independently (via the quorum certificate) and then verifies the proof against it — so a lying or buggy node can at worst make verification *fail*; it can never forge an answer.
+
+Use the `PluginClient.queryStateWithProof(height, key)` helper for the single-key endpoint. It sets `prove = true` on the read and returns a `StateProof(value, exists, proof, stateRoot, height)`: the committed value, whether the key exists, the sparse-merkle-tree proof, and the committed `stateRoot`/`height` the proof commits to. Have the by-address handler call it and return JSON shaped `{height, stateRoot(hex), key(hex), exists, value(hex), proof:[{key,value,bitmask}], faucet}`:
+
+```kotlin
+// GET /v1/query/faucets?address=<hex>[&height=<uint64>]
+private fun handleQueryFaucets(exchange: HttpExchange) {
+    val address = queryParam(exchange, "address")
+    if (address.isNullOrEmpty()) {
+        handleFaucetList(exchange) // no address -> range read (returns {"faucets":[...]})
+        return
+    }
+    val addr = address.hexToBytes()
+    val height = queryParam(exchange, "height")?.toLongOrNull() ?: 0L // 0 = latest committed
+    val key = keyForFaucet(addr)
+
+    // ask for the value AND a merkle proof over the socket (prove = true)
+    val sp = plugin.queryStateWithProof(height, key)
+
+    val json = buildJsonObject {
+        put("height", JsonPrimitive(sp.height))
+        put("stateRoot", JsonPrimitive(sp.stateRoot.toHexString()))
+        put("key", JsonPrimitive(key.toHexString()))
+        put("exists", JsonPrimitive(sp.exists))
+        put("value", JsonPrimitive(sp.value.toHexString())) // raw committed bytes the proof commits to
+        put("proof", buildJsonArray {
+            for (node in sp.proof) {
+                add(buildJsonObject {
+                    put("key", JsonPrimitive(node.key.toByteArray().toHexString()))
+                    put("value", JsonPrimitive(node.value.toByteArray().toHexString()))
+                    put("bitmask", JsonPrimitive(node.bitmask))
+                })
+            }
+        })
+        // convenience view only; a trustless client should verify `value` against the proof instead
+        if (sp.exists) {
+            val faucet = Faucet.parseFrom(sp.value)
+            put("faucet", buildJsonObject {
+                put("recipientAddress", JsonPrimitive(faucet.recipientAddress.toByteArray().toHexString()))
+                put("totalAmount", JsonPrimitive(faucet.totalAmount))
+                put("count", JsonPrimitive(faucet.count))
+            })
+        }
+    }
+    writeJson(exchange, json.toString())
+}
+```
+
+> The `faucet` field is a convenience view only. A trustless client should **ignore it**, recompute the key from the address, verify `proof` against the authenticated `stateRoot`, and decode `value` itself. When the key is absent, `exists` is `false` and `proof` is a **non-membership** proof. The reward endpoint follows the same pattern via `keyForReward(addr)`.
 
 ### Query the endpoints
 
@@ -508,8 +557,17 @@ After faucet/reward transactions have been included in blocks:
 curl 'http://localhost:50010/v1/query/faucets'
 # {"faucets":[{"recipientAddress":"...","totalAmount":1000000000,"count":1}],"count":1,"height":0}
 
-# a single recipient's faucet record
+# a single recipient's faucet record, now with a verifiable merkle proof
 curl 'http://localhost:50010/v1/query/faucets?address=<recipient-hex>'
+# {
+#   "height": 123,
+#   "stateRoot": "a1b2c3...",
+#   "key": "0164...",
+#   "exists": true,
+#   "value": "0a14...",                       # raw committed bytes the proof commits to
+#   "proof": [{"key":"...","value":"...","bitmask":0}, ...],
+#   "faucet": {"recipientAddress":"...","totalAmount":1000000000,"count":1}
+# }
 
 # all reward records (optionally at a historical height)
 curl 'http://localhost:50010/v1/query/rewards?height=42'
@@ -548,6 +606,77 @@ cd plugin/kotlin
 make build
 ```
 
+## Step 7b: Configure the faucet amount via `pluginConfig`
+
+The faucet amount is **operator-controlled**, not supplied per-transaction. It is read from the
+node's `config.json` `pluginConfig` field, which Canopy forwards verbatim to the plugin during the
+handshake. `pluginConfig` is intentionally free-form JSON on the node side, so each plugin can
+define its own schema and validate it at startup.
+
+### How it flows
+
+1. **Node config** (`~/.canopy/config.json`) carries an opaque `pluginConfig` JSON value:
+
+   ```json
+   {
+     "plugin": "kotlin",
+     "pluginConfig": { "faucetAmount": 1000000000 }
+   }
+   ```
+
+2. **Canopy core** (`lib/config.go` `MainConfig.PluginConfig`) reads it as raw JSON and forwards it
+   to the plugin in the handshake response (`PluginFSMConfig.plugin_config`). Core never inspects it.
+
+3. **The plugin** decodes + validates it at startup. The base SDK (`Config.kt`) defines the
+   expected shape and the single validation entry point:
+
+   ```kotlin
+   // Config gains an opaque pluginConfig field (any JSON)
+   @Serializable
+   data class Config(
+       val chainId: Long = 1,
+       val dataDirPath: String = "/tmp/plugin/",
+       val rpcAddress: String = "0.0.0.0:50010",
+       val pluginConfig: JsonElement? = null
+   )
+
+   // PluginSettings is the typed, validated shape the plugin expects
+   @Serializable
+   data class PluginSettings(val faucetAmount: Long = 0)
+
+   // parsePluginConfig decodes + validates the forwarded JSON at startup; a malformed blob throws
+   // (and the plugin exits), satisfying "validate it is in the expected form".
+   fun parsePluginConfig(raw: ByteArray): PluginSettings { ... }
+   ```
+
+   `PluginClient.handshake()` calls `parsePluginConfig(response.config.pluginConfig.toByteArray())`
+   and stores the result on `plugin.settings`, so handlers can read `plugin.settings.faucetAmount`.
+
+### Require a non-zero faucet amount (tutorial validation)
+
+Because this plugin's faucet is useless without a configured amount, extend `parsePluginConfig` to
+reject a missing/zero `faucetAmount` so the plugin fails fast at startup:
+
+```kotlin
+fun parsePluginConfig(raw: ByteArray): PluginSettings {
+    if (raw.isEmpty()) {
+        throw IllegalArgumentException("missing pluginConfig (expected { \"faucetAmount\": <uint64> })")
+    }
+    val settings = try {
+        Json { ignoreUnknownKeys = true }.decodeFromString<PluginSettings>(raw.decodeToString())
+    } catch (e: Exception) {
+        throw IllegalArgumentException("invalid pluginConfig: ${e.message}", e)
+    }
+    if (settings.faucetAmount <= 0L) {
+        throw IllegalArgumentException("faucetAmount must be greater than zero")
+    }
+    return settings
+}
+```
+
+The tutorial test (`tutorial/.../RpcTest.kt`) asserts the faucet mints exactly this configured amount
+(`FAUCET_CONFIGURED_AMOUNT`), proving the amount comes from `pluginConfig` and not from the RPC request.
+
 ## Step 8: Running Canopy with the Plugin
 
 There are two ways to run Canopy with the Kotlin plugin: locally or with Docker.
@@ -567,14 +696,18 @@ canopy start
 
 #### 2. Enable the Kotlin plugin
 
-Edit `~/.canopy/config.json` and add or modify the `plugin` field to `"kotlin"`:
+Edit `~/.canopy/config.json` and add or modify the `plugin` field to `"kotlin"`, and supply the
+opaque `pluginConfig` the plugin expects (here `faucetAmount`):
 
 ```json
 {
   "plugin": "kotlin",
+  "pluginConfig": { "faucetAmount": 1000000000 },
   ...
 }
 ```
+
+> **Note**: `pluginConfig` is an opaque (any) JSON value that Canopy forwards to the plugin unchanged. For this tutorial the Kotlin plugin expects `{ "faucetAmount": <uint64> }` and validates it at startup (see Step 7b); the plugin will refuse to start if it is missing or `faucetAmount` is zero.
 
 #### 3. Start Canopy
 
@@ -787,7 +920,7 @@ Step 1: Creating two accounts in keystore...
   Current height: ...
 
 Step 2: Using faucet to add balance to account 1...
-  Amount: 1000000000, Fee: 10000
+  Amount (from pluginConfig): 1000000000, Fee: 10000
   Faucet transaction sent: ...
   Waiting for faucet transaction to be confirmed...
   Faucet transaction confirmed!

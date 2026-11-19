@@ -71,3 +71,7 @@ export function ErrInvalidAmount(): IPluginError {
 export function ErrTxFeeBelowStateLimit(): IPluginError {
     return NewError(14, DefaultModule, 'tx.fee is below state limit');
 }
+
+export function ErrInvalidPluginConfig(msg: string): IPluginError {
+    return NewError(15, DefaultModule, `invalid pluginConfig: ${msg}`);
+}

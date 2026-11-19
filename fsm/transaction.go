@@ -446,6 +446,10 @@ func (s *StateMachine) PopulateSpecialMessageFields(tx lib.TransactionI, signer 
 			// populate the proposal hash for dao transfer
 			hash, _ := tx.GetHash()
 			x.ProposalHash = lib.BytesToString(hash)
+		case *MessageChangeByzantineOutput:
+			// populate the proposal hash for the Validator output change
+			hash, _ := tx.GetHash()
+			x.ProposalHash = lib.BytesToString(hash)
 		case *MessageCreateOrder:
 			// populate the order id
 			hash, _ := tx.GetHash()
@@ -567,6 +571,18 @@ func NewDAOTransferTx(from crypto.PrivateKeyI, amount, start, end, networkId, ch
 		Mint:        mint,
 		StartHeight: start,
 		EndHeight:   end,
+	}, networkId, chainId, fee, height, memo)
+}
+
+// NewChangeByzantineOutputTx creates a governance proposal that redirects an unstaking Validator's returned stake.
+func NewChangeByzantineOutputTx(from crypto.PrivateKeyI, validatorAddress, outputAddress crypto.AddressI,
+	start, end, networkId, chainId, fee, height uint64, memo string) (lib.TransactionI, lib.ErrorI) {
+	return NewTransaction(from, &MessageChangeByzantineOutput{
+		ValidatorAddress: validatorAddress.Bytes(),
+		OutputAddress:    outputAddress.Bytes(),
+		Signer:           from.PublicKey().Address().Bytes(),
+		StartHeight:      start,
+		EndHeight:        end,
 	}, networkId, chainId, fee, height, memo)
 }
 

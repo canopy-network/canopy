@@ -261,3 +261,21 @@ message MessageDexLiquidityWithdraw {
   // OrderId: auto-populated by the state machine to assign the unique bytes to the order
   bytes OrderId = 4;  // @gotags: json:"orderId"
 }
+
+// MessageChangeByzantineOutput is a governance proposal used to redirect the returned stake of an unstaking
+// Validator. This is intentionally a separate message from MessageEditStake so governance cannot alter any other
+// Validator fields and the normal output-address authorization remains unchanged.
+message MessageChangeByzantineOutput {
+  // validator_address: identifies the unstaking Validator whose output address will be changed
+  bytes validator_address = 1; // @gotags: json:"validatorAddress"
+  // output_address: is the new address that will receive the Validator's returned stake
+  bytes output_address = 2; // @gotags: json:"outputAddress"
+  // signer: is the address of the sender / creator of the proposal
+  bytes signer = 3;
+  // start_height: is the first height at which the proposal may execute
+  uint64 start_height = 4; // @gotags: json:"startHeight"
+  // end_height: is the last height at which the proposal may execute
+  uint64 end_height = 5; // @gotags: json:"endHeight"
+  // proposal_hash: internal use only, tracks the hash of the proposal to check against the proposals.json file
+  string proposal_hash = 6; // @gotags: json:"proposalHash"
+}

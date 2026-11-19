@@ -568,8 +568,10 @@ type FeeParams struct {
 	DexLiquidityDepositFee uint64 `protobuf:"varint,15,opt,name=dex_liquidity_deposit_fee,json=dexLiquidityDepositFee,proto3" json:"dexLiquidityDeposit"` // @gotags: json:"dexLiquidityDeposit"
 	// dex_liquidity_withdraw: is the fee amount (in uCNPY) for Message Dex Liquidity Withdraw
 	DexLiquidityWithdrawFee uint64 `protobuf:"varint,16,opt,name=dex_liquidity_withdraw_fee,json=dexLiquidityWithdrawFee,proto3" json:"dexLiquidityWithdraw"` // @gotags: json:"dexLiquidityWithdraw"
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+	// change_byzantine_output_fee: is the fee amount (in uCNPY) for Message Change Byzantine Output
+	ChangeByzantineOutputFee uint64 `protobuf:"varint,17,opt,name=change_byzantine_output_fee,json=changeByzantineOutputFee,proto3" json:"changeByzantineOutputFee"` // @gotags: json:"changeByzantineOutputFee"
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *FeeParams) Reset() {
@@ -714,6 +716,13 @@ func (x *FeeParams) GetDexLiquidityWithdrawFee() uint64 {
 	return 0
 }
 
+func (x *FeeParams) GetChangeByzantineOutputFee() uint64 {
+	if x != nil {
+		return x.ChangeByzantineOutputFee
+	}
+	return 0
+}
+
 // GovernanceParams is the parameter space that define the rules that enable decentralized and autonomous
 // governing of the network
 type GovernanceParams struct {
@@ -804,7 +813,7 @@ const file_gov_proto_rawDesc = "" +
 	"\x19lock_order_fee_multiplier\x18\x10 \x01(\x04R\x16lockOrderFeeMultiplier\x12?\n" +
 	"\x1cminimum_stake_for_validators\x18\x11 \x01(\x04R\x19minimumStakeForValidators\x12=\n" +
 	"\x1bminimum_stake_for_delegates\x18\x12 \x01(\x04R\x18minimumStakeForDelegates\x12E\n" +
-	"\x1fmaximum_delegates_per_committee\x18\x13 \x01(\x04R\x1cmaximumDelegatesPerCommittee\"\x9e\x05\n" +
+	"\x1fmaximum_delegates_per_committee\x18\x13 \x01(\x04R\x1cmaximumDelegatesPerCommittee\"\xdd\x05\n" +
 	"\tFeeParams\x12\x19\n" +
 	"\bsend_fee\x18\x01 \x01(\x04R\asendFee\x12\x1b\n" +
 	"\tstake_fee\x18\x02 \x01(\x04R\bstakeFee\x12$\n" +
@@ -825,7 +834,8 @@ const file_gov_proto_rawDesc = "" +
 	"\x10delete_order_fee\x18\r \x01(\x04R\x0edeleteOrderFee\x12-\n" +
 	"\x13dex_limit_order_fee\x18\x0e \x01(\x04R\x10dexLimitOrderFee\x129\n" +
 	"\x19dex_liquidity_deposit_fee\x18\x0f \x01(\x04R\x16dexLiquidityDepositFee\x12;\n" +
-	"\x1adex_liquidity_withdraw_fee\x18\x10 \x01(\x04R\x17dexLiquidityWithdrawFee\"F\n" +
+	"\x1adex_liquidity_withdraw_fee\x18\x10 \x01(\x04R\x17dexLiquidityWithdrawFee\x12=\n" +
+	"\x1bchange_byzantine_output_fee\x18\x11 \x01(\x04R\x18changeByzantineOutputFee\"F\n" +
 	"\x10GovernanceParams\x122\n" +
 	"\x15dao_reward_percentage\x18\x01 \x01(\x04R\x13daoRewardPercentage*I\n" +
 	"\x15GovProposalVoteConfig\x12\x0e\n" +
