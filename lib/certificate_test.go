@@ -616,3 +616,11 @@ func TestOrdersCheckBasicRejectsOversizedLists(t *testing.T) {
 func newTestOrderId(_ *testing.T, variant int) []byte {
 	return []byte(fmt.Sprintf("%d", variant))
 }
+
+func TestCertificateResultEqualsRootBuildHeight(t *testing.T) {
+	a := &CertificateResult{RootBuildHeight: 100}
+	b := &CertificateResult{RootBuildHeight: 100}
+	require.True(t, a.Equals(b), "equal root build heights must be equal")
+	b.RootBuildHeight = 101
+	require.False(t, a.Equals(b), "a different root build height must not be equal")
+}
