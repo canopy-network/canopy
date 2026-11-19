@@ -161,9 +161,12 @@ type CertificateResult struct {
 	DexBatch *DexBatch `protobuf:"bytes,6,opt,name=dex_batch,json=dexBatch,proto3" json:"dexBatch"` // @gotags: json:"dexBatch"
 	// root_dex_batch: ifNested: contains the root chain's dex batch;
 	// without it the nested chain cannot sync from scratch because it no longer has access to the dex batch
-	RootDexBatch  *DexBatch `protobuf:"bytes,7,opt,name=root_dex_batch,json=rootDexBatch,proto3" json:"rootDexBatch"` // @gotags: json:"rootDexBatch"
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	RootDexBatch *DexBatch `protobuf:"bytes,7,opt,name=root_dex_batch,json=rootDexBatch,proto3" json:"rootDexBatch"` // @gotags: json:"rootDexBatch"
+	// root_build_height: the root chain height this block was built on
+	// the committee of this root height (or newer) decides the next height of a nested chain
+	RootBuildHeight uint64 `protobuf:"varint,8,opt,name=root_build_height,json=rootBuildHeight,proto3" json:"rootBuildHeight"` // @gotags: json:"rootBuildHeight"
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *CertificateResult) Reset() {
@@ -243,6 +246,13 @@ func (x *CertificateResult) GetRootDexBatch() *DexBatch {
 		return x.RootDexBatch
 	}
 	return nil
+}
+
+func (x *CertificateResult) GetRootBuildHeight() uint64 {
+	if x != nil {
+		return x.RootBuildHeight
+	}
+	return 0
 }
 
 // RewardRecipients is the list of recipients who will receive rewards from the committee's treasury pool,
@@ -889,7 +899,7 @@ const file_certificate_proto_rawDesc = "" +
 	"\n" +
 	"block_hash\x18\x05 \x01(\fR\tblockHash\x12!\n" +
 	"\fproposer_key\x18\x06 \x01(\fR\vproposerKey\x127\n" +
-	"\tsignature\x18\a \x01(\v2\x19.types.AggregateSignatureR\tsignature\"\xf5\x02\n" +
+	"\tsignature\x18\a \x01(\v2\x19.types.AggregateSignatureR\tsignature\"\xa1\x03\n" +
 	"\x11CertificateResult\x12D\n" +
 	"\x11reward_recipients\x18\x01 \x01(\v2\x17.types.RewardRecipientsR\x10rewardRecipients\x12A\n" +
 	"\x10slash_recipients\x18\x02 \x01(\v2\x16.types.SlashRecipientsR\x0fslashRecipients\x12%\n" +
@@ -899,7 +909,8 @@ const file_certificate_proto_rawDesc = "" +
 	"checkpoint\x12\x18\n" +
 	"\aretired\x18\x05 \x01(\bR\aretired\x12,\n" +
 	"\tdex_batch\x18\x06 \x01(\v2\x0f.types.DexBatchR\bdexBatch\x125\n" +
-	"\x0eroot_dex_batch\x18\a \x01(\v2\x0f.types.DexBatchR\frootDexBatch\"\x81\x01\n" +
+	"\x0eroot_dex_batch\x18\a \x01(\v2\x0f.types.DexBatchR\frootDexBatch\x12*\n" +
+	"\x11root_build_height\x18\b \x01(\x04R\x0frootBuildHeight\"\x81\x01\n" +
 	"\x10RewardRecipients\x12A\n" +
 	"\x10payment_percents\x18\x01 \x03(\v2\x16.types.PaymentPercentsR\x0fpaymentPercents\x12*\n" +
 	"\x11number_of_samples\x18\x02 \x01(\x04R\x0fnumberOfSamples\"M\n" +

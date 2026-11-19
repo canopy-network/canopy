@@ -13,6 +13,7 @@ import (
 	"github.com/canopy-network/canopy/controller"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/gorilla/websocket"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -76,6 +77,14 @@ type ordersCache struct {
 	result *lib.OrderBook
 }
 
+// validatorSetCacheSize is the number of historical committees kept in the validator set cache.
+const validatorSetCacheSize = 8
+
+// validatorSetKey identifies a committee at a specific root height
+type validatorSetKey struct {
+	rootChainId, chainId, rootHeight uint64
+}
+
 // RCManager handles a group of root-chain sock clients
 type RCManager struct {
 	c             lib.Config                    // the global node config
@@ -89,6 +98,8 @@ type RCManager struct {
 	lottery       lotteryCache                  // per-height cache for GetLotteryWinner
 	dexBatch      dexBatchCache                 // per-height cache for GetDexBatch
 	orders        ordersCache                   // per-height cache for GetOrders
+	// historical committee cache
+	validatorSets *lru.Cache[validatorSetKey, *lib.ConsensusValidators] // cache of historical committees for GetValidatorSet
 	// rc subscriber limits
 	rcSubscriberReadLimitBytes int64
 	rcSubscriberWriteTimeout   time.Duration
@@ -129,6 +140,8 @@ func NewRCManager(controller *controller.Controller, config lib.Config, logger l
 	if blobCacheEntries <= 0 {
 		blobCacheEntries = defaultIndexerBlobCacheEntries
 	}
+	// create the historical committee cache (only errors on a non-positive size)
+	validatorSets, _ := lru.New[validatorSetKey, *lib.ConsensusValidators](validatorSetCacheSize)
 	// create the manager
 	manager = &RCManager{
 		c:                          config,
@@ -145,6 +158,7 @@ func NewRCManager(controller *controller.Controller, config lib.Config, logger l
 		rcSubscriberPingPeriod:     pingPeriod,
 		maxRCSubscribers:           maxSubscribers,
 		maxRCSubscribersPerChain:   maxSubscribersPerChain,
+		validatorSets:              validatorSets,
 	}
 	// set the manager in the controller
 	controller.RCManager = manager
@@ -256,10 +270,28 @@ func (r *RCManager) GetValidatorSet(rootChainId, id, rootHeight uint64) (lib.Val
 		// exit with a copy of the previous validator set
 		return lib.NewValidatorSet(sub.Info.LastValidatorSet)
 	}
+	// only past root heights are immutable and safe to cache
+	key := validatorSetKey{rootChainId: rootChainId, chainId: id, rootHeight: rootHeight}
+	isPast := rootHeight < sub.Info.Height
+	// return the cached committee if available
+	if isPast {
+		if validators, found := r.validatorSets.Get(key); found {
+			// exit with a copy of the cached validator set
+			return lib.NewValidatorSet(validators)
+		}
+	}
 	// warn of the remote RPC call to the root chain API
 	r.log.Warnf("Executing remote GetValidatorSet call with requested height=%d for rootChainId=%d with latest root height at %d", rootHeight, rootChainId, sub.Info.Height)
 	// execute the remote RPC call to the root chain API
-	return sub.ValidatorSet(rootHeight, id)
+	set, err := sub.ValidatorSet(rootHeight, id)
+	if err != nil {
+		return lib.ValidatorSet{}, err
+	}
+	// cache the committee for subsequent requests
+	if isPast && set.ValidatorSet != nil {
+		r.validatorSets.Add(key, set.ValidatorSet)
+	}
+	return set, nil
 }
 
 // GetOrders() returns the order book from the root-chain

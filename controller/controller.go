@@ -215,10 +215,12 @@ func (c *Controller) UpdateRootChainInfo(info *lib.RootChainInfo) {
 	if info.LastValidatorSet == nil || len(info.LastValidatorSet.ValidatorSet) == 0 {
 		// signal to reset consensus and start a new height
 		c.Consensus.ResetBFT <- bft.ResetBFT{IsRootChainUpdate: false, StartTime: timestamp}
-	} else {
+	} else if activeRootChainId == c.Config.ChainId {
 		// signal to reset consensus
 		c.Consensus.ResetBFT <- bft.ResetBFT{IsRootChainUpdate: true, StartTime: timestamp}
 	}
+	// nested chains don't reset: the committee is pinned by the last committed block,
+	// so root updates are only cached and never interrupt a round in progress
 	// update the peer 'must connect'
 	c.UpdateP2PMustConnect(info.ValidatorSet)
 }
@@ -521,6 +523,93 @@ func (c *Controller) ResetFSM() { c.FSM.Reset() }
 func (c *Controller) RootChainHeight() uint64 {
 	chainId, _ := c.FSM.GetRootChainId()
 	return c.RCManager.GetHeight(chainId)
+}
+
+// ActiveRootHeight() returns the root height whose committee decides the height currently being built
+// pinned is false when no committed record applies and the latest known root height is used instead
+func (c *Controller) ActiveRootHeight() (rootHeight uint64, pinned bool) {
+	// own root chains use their own latest height, as root updates and new heights coincide
+	if c.LoadIsOwnRoot() {
+		return c.RootChainHeight(), false
+	}
+	// get the root build height recorded by the last committed block
+	recorded, lastRootHeight, ok := c.lastRootBuildHeight()
+	if !ok {
+		return c.RootChainHeight(), false
+	}
+	// never go below the committee that signed the last block
+	return max(recorded, lastRootHeight), true
+}
+
+// CheckRootBuildHeight() validates the root build height of a proposal before voting for it
+// NOTE: these are local voting rules, block validity on replay only depends on committed data
+func (c *Controller) CheckRootBuildHeight(rcBuildHeight uint64, lockedReproposal bool) lib.ErrorI {
+	// own root chains build on their own height
+	if c.LoadIsOwnRoot() {
+		return nil
+	}
+	// the next committee must be pinned to an actual root height
+	if rcBuildHeight == 0 {
+		return lib.ErrInvalidRCBuildHeight()
+	}
+	// the recorded root build height must never go backwards
+	if recorded, _, ok := c.lastRootBuildHeight(); ok && rcBuildHeight < recorded {
+		return lib.ErrInvalidRCBuildHeight()
+	}
+	latest := c.RootChainHeight()
+	// the committee of the recorded root height must be loadable by this replica
+	if rcBuildHeight > latest {
+		return lib.ErrInvalidRCBuildHeight()
+	}
+	// prevent stale root heights from delaying committee rotation, a locked proposal can't change its contents
+	if !lockedReproposal && rcBuildHeight+lib.MaxRootBuildHeightLag < latest {
+		return lib.ErrInvalidRCBuildHeight()
+	}
+	return nil
+}
+
+// CheckActiveRootHeight() ensures a certificate was signed by the pinned committee or a newer one
+// NOTE: uses only committed data, so live and syncing nodes evaluate it identically
+func (c *Controller) CheckActiveRootHeight(qc *lib.QuorumCertificate) lib.ErrorI {
+	// own root chains aren't pinned
+	if c.LoadIsOwnRoot() {
+		return nil
+	}
+	// only enforce when the last committed block recorded a root build height
+	recorded, lastRootHeight, ok := c.lastRootBuildHeight()
+	if !ok {
+		return nil
+	}
+	if qc.Header.RootHeight < max(recorded, lastRootHeight) {
+		return lib.ErrWrongRootHeight()
+	}
+	return nil
+}
+
+// lastRootBuildHeight() returns the root build height recorded by the last committed block and the root height that signed it
+// ok is false at genesis, for blocks without a record (pre-upgrade) and when the root chain changed since the last block
+func (c *Controller) lastRootBuildHeight() (recorded, lastRootHeight uint64, ok bool) {
+	// the height currently being built
+	height := c.FSM.Height()
+	// no committed block to read from
+	if height <= 1 {
+		return
+	}
+	// heights of different root chains aren't comparable, ignore the record after a root chain switch
+	if c.LoadRootChainId(height) != c.LoadRootChainId(height-1) {
+		return
+	}
+	// load the last committed certificate
+	lastQC, err := c.FSM.LoadCertificate(height - 1)
+	if err != nil {
+		c.log.Errorf("Unable to load the last certificate for the active root height: %s", err.Error())
+		return
+	}
+	// blocks committed before the root build height existed carry no record
+	if lastQC == nil || lastQC.Header == nil || lastQC.Results.GetRootBuildHeight() == 0 {
+		return
+	}
+	return lastQC.Results.GetRootBuildHeight(), lastQC.Header.RootHeight, true
 }
 
 // ChainHeight() returns the height of this target chain

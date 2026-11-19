@@ -63,6 +63,9 @@ message CertificateResult {
   // root_dex_batch: ifNested: contains the root chain's dex batch;
   // without it the nested chain cannot sync from scratch because it no longer has access to the dex batch
   DexBatch root_dex_batch = 7; // @gotags: json:"rootDexBatch"
+  // root_build_height: the root chain height this block was built on
+  // the committee of this root height (or newer) decides the next height of a nested chain
+  uint64 root_build_height = 8; // @gotags: json:"rootBuildHeight"
 }
 
 // RewardRecipients is the list of recipients who will receive rewards from the committee's treasury pool,

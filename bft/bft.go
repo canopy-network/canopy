@@ -124,7 +124,8 @@ func (b *BFT) ProposalVoteDeadlineUnixMilli() int64 {
 func (b *BFT) Start() {
 	var err lib.ErrorI
 	// load the committee from the base chain
-	b.ValidatorSet, err = b.Controller.LoadCommittee(b.LoadRootChainId(b.ChainHeight()), b.Controller.RootChainHeight())
+	rootHeight, _ := b.Controller.ActiveRootHeight()
+	b.ValidatorSet, err = b.Controller.LoadCommittee(b.LoadRootChainId(b.ChainHeight()), rootHeight)
 	if err != nil {
 		b.log.Warn(err.Error())
 	}
@@ -200,7 +201,7 @@ func (b *BFT) HandlePhase() {
 	}
 	// if not a validator, wait until the next block to check if became a validator
 	if !b.SelfIsValidator() {
-		b.log.Info("Not currently a validator, waiting for a new block")
+		b.log.Infof("Not in the committee for active root height %d, waiting for a new block", b.RootHeight)
 		stopTimers()
 		return
 	}
@@ -392,6 +393,12 @@ func (b *BFT) StartProposeVotePhase() {
 	// ensure the build height isn't too old
 	if msg.RcBuildHeight < b.CommitteeData.LastRootHeightUpdated {
 		b.log.Error(lib.ErrInvalidRCBuildHeight().Error())
+		b.RoundInterrupt()
+		return
+	}
+	// ensure the build height is valid to pin the committee of the next height
+	if err = b.CheckRootBuildHeight(msg.RcBuildHeight, b.isLockedReproposal(msg)); err != nil {
+		b.log.Errorf("Root build height %d rejected: %s", msg.RcBuildHeight, err.Error())
 		b.RoundInterrupt()
 		return
 	}
@@ -703,12 +710,12 @@ func (b *BFT) NewRound(newHeight bool) {
 	b.VDFCache = []*Message{}
 }
 
-// RefreshRootChainInfo() updates the cached root chain info with the latest known
+// RefreshRootChainInfo() updates the cached root chain info with the active (pinned) root height
 func (b *BFT) RefreshRootChainInfo() {
 	var err lib.ErrorI
 	// update heights
 	b.Height = b.Controller.ChainHeight()
-	b.RootHeight = b.Controller.RootChainHeight()
+	b.RootHeight, _ = b.Controller.ActiveRootHeight()
 	// update the validator set
 	b.ValidatorSet, err = b.Controller.LoadCommittee(b.LoadRootChainId(b.Height), b.RootHeight)
 	if err != nil {
@@ -774,6 +781,15 @@ func (b *BFT) SafeNode(msg *Message) lib.ErrorI {
 		return nil // LIVENESS (HIGHER ROUND v COMMITTEE THAN LOCKED)
 	}
 	return ErrFailedSafeNodePredicate()
+}
+
+// isLockedReproposal() returns true if the proposal re-proposes the block this replica is locked on
+// NOTE: SafeNode() already ensured the message's HighQC justifies its proposal
+func (b *BFT) isLockedReproposal(msg *Message) bool {
+	if b.HighQC == nil || msg.HighQc == nil {
+		return false
+	}
+	return bytes.Equal(b.HighQC.BlockHash, msg.HighQc.BlockHash) && bytes.Equal(b.HighQC.ResultsHash, msg.HighQc.ResultsHash)
 }
 
 // SetTimerForNextPhase() calculates the wait time for a specific phase/Round, resets the Phase wait timer
@@ -1008,6 +1024,10 @@ type (
 		ChainHeight() uint64
 		// RootChainHeight returns the height of the root-chain
 		RootChainHeight() uint64
+		// ActiveRootHeight returns the root height whose committee decides the current height and if it's pinned by committed data
+		ActiveRootHeight() (rootHeight uint64, pinned bool)
+		// CheckRootBuildHeight validates the root build height of a proposal before voting for it
+		CheckRootBuildHeight(rcBuildHeight uint64, lockedReproposal bool) lib.ErrorI
 		// ProduceProposal() as a Leader, create a Proposal in the form of a block and certificate results
 		ProduceProposal(be *ByzantineEvidence, vdf *crypto.VDF) (rcBuildHeight uint64, block []byte, results *lib.CertificateResult, err lib.ErrorI)
 		// ValidateCertificate() as a Replica, validates the leader proposal

@@ -396,6 +396,11 @@ func (x *CertificateResult) Equals(y *CertificateResult) bool {
 		// return unequal
 		return false
 	}
+	// if the root build heights aren't equal
+	if x.RootBuildHeight != y.RootBuildHeight {
+		// return unequal
+		return false
+	}
 	// return equality based on the final field
 	return x.Retired == y.Retired
 }

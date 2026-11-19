@@ -627,7 +627,7 @@ func (c *Controller) UpdateP2PMustConnect(v *lib.ConsensusValidators) {
 	// if this node 'is validator'
 	if selfIsValidator {
 		// log the must connect update
-		c.log.Info("Self IS a validator 👍")
+		c.log.Info("Self IS in the latest root committee 👍")
 		gossip := c.Config.GossipThreshold > 0 && lenMustConnects >= int(c.Config.GossipThreshold)
 		c.P2P.SetGossipMode(gossip)
 		// on gossip, explicitly rely on the dial peers for new peer connections
@@ -639,7 +639,7 @@ func (c *Controller) UpdateP2PMustConnect(v *lib.ConsensusValidators) {
 		// send the list to the p2p module
 		c.P2P.MustConnectsReceiver <- mustConnects
 	} else {
-		c.log.Info("Self IS NOT a validator 👎")
+		c.log.Info("Self IS NOT in the latest root committee 👎")
 	}
 }
 

@@ -464,6 +464,10 @@ const (
 	FilterOption_Exclude              = 2 // condition must be false
 )
 
+// MaxRootBuildHeightLag is the maximum number of root blocks a proposal's root build height may lag behind
+// the latest root height known by a replica; it is a local voting rule, never re-checked on replay
+const MaxRootBuildHeightLag = uint64(20)
+
 // VIEW CODE BELOW
 
 func (x *View) CheckBasic() (err ErrorI) {

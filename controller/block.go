@@ -641,6 +641,11 @@ func (c *Controller) handlePeerBlock(msg *lib.BlockMessage, syncing, verifyQC bo
 		// exit with error
 		return nil, err
 	}
+	// ensure the certificate was signed by the pinned committee (or a newer one)
+	if err = c.CheckActiveRootHeight(qc); err != nil {
+		// exit with error
+		return nil, err
+	}
 	// create a temp variable to double-check our saved block result against the peers
 	result := c.Consensus.BlockResult
 	// if our cached result is the same as the peer block, use that
