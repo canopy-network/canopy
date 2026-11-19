@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"fmt"
+	"math"
 	"slices"
 	"sort"
 	"sync/atomic"
@@ -70,6 +71,9 @@ type BFT struct {
 	log          lib.LoggerI        // logging
 }
 
+// ProposalVoteApproveListRoundLimit is the first round that disables approve-list proposal voting.
+const ProposalVoteApproveListRoundLimit uint64 = 3
+
 // New() creates a new instance of HotstuffBFT for a specific Committee
 func New(c lib.Config, valKey crypto.PrivateKeyI, rootHeight, height uint64, con Controller, vdfEnabled bool, m *lib.Metrics, l lib.LoggerI) (*BFT, lib.ErrorI) {
 	// determine if using a Verifiable Delay Function for long-range-attack protection
@@ -133,6 +137,17 @@ func (b *BFT) ProposalVoteDeadlineUnixMilli() int64 {
 // usesDeterministicProposers() reports whether the configured proposer mode is deterministic.
 func (b *BFT) usesDeterministicProposers() bool {
 	return b != nil && b.Config.ConsensusConfig.UsesDeterministicProposers()
+}
+
+func (b *BFT) selectDeterministicProposer() bool {
+	proposer, err := SelectProposerWeightedRoundRobin(b.View, b.ValidatorSet.ValidatorSet, b.ValidatorSet.TotalPower)
+	if err != nil {
+		b.ProposerKey = nil
+		b.log.Errorf("Unable to select deterministic proposer: %s", err.Error())
+		return false
+	}
+	b.ProposerKey = proposer
+	return true
 }
 
 // Start() initiates the HotStuff BFT service.
@@ -200,7 +215,7 @@ func (b *BFT) Start() {
 					b.SetHeightAnchor(resetBFT.StartTime)
 					b.StartRound()
 					if !resetBFT.IsRootChainUpdate {
-						b.deadlineMs.Store(b.RoundDeadline(2).UnixMilli())
+						b.deadlineMs.Store(b.RoundDeadline(ProposalVoteApproveListRoundLimit - 1).UnixMilli())
 					}
 				} else {
 					processTime := validProcessTime(resetBFT.StartTime, time.Duration(b.Config.BlockTimeMS())*time.Millisecond)
@@ -337,9 +352,7 @@ func (b *BFT) StartElectionPhase() {
 		}
 		return
 	}
-	b.ProposerKey = SelectProposerWeightedRoundRobin(b.View, b.ValidatorSet.ValidatorSet, b.ValidatorSet.TotalPower)
-	if len(b.ProposerKey) == 0 {
-		b.log.Error("unable to select deterministic proposer")
+	if !b.selectDeterministicProposer() {
 		return
 	}
 	b.log.Infof("Selected deterministic proposer %s", lib.BytesToTruncatedString(b.ProposerKey))
@@ -357,7 +370,9 @@ func (b *BFT) StartElectionVotePhase() {
 	if !b.usesDeterministicProposers() {
 		b.ProposerKey = SelectProposerFromCandidates(b.GetElectionCandidates(), b.SortitionData, b.ValidatorSet.ValidatorSet)
 	} else if len(b.ProposerKey) == 0 {
-		b.ProposerKey = SelectProposerWeightedRoundRobin(b.View, b.ValidatorSet.ValidatorSet, b.ValidatorSet.TotalPower)
+		if !b.selectDeterministicProposer() {
+			return
+		}
 	}
 	defer func() { b.ProposerKey = nil }()
 	if b.SelfIsProposer() {
@@ -392,8 +407,8 @@ func (b *BFT) StartElectionVotePhase() {
 func (b *BFT) StartProposePhase() {
 	b.log.Info(b.View.ToString())
 	if b.usesDeterministicProposers() {
-		if len(b.ProposerKey) == 0 {
-			b.ProposerKey = SelectProposerWeightedRoundRobin(b.View, b.ValidatorSet.ValidatorSet, b.ValidatorSet.TotalPower)
+		if len(b.ProposerKey) == 0 && !b.selectDeterministicProposer() {
+			return
 		}
 		if !b.SelfIsProposer() {
 			return
@@ -991,7 +1006,11 @@ func (b *BFT) RoundDeadline(round uint64) time.Time {
 		return b.BFTStartTime
 	}
 	units := roundScheduleUnits(b.timeoutScheduleStart, round-b.roundScheduleStart)
-	return b.BFTStartTime.Add(time.Duration(units) * b.Config.ConsensusConfig.RoundRobinBlockInterval())
+	interval := b.Config.ConsensusConfig.RoundRobinBlockInterval()
+	if maxUnits := uint64(math.MaxInt64) / uint64(interval); units > maxUnits {
+		units = maxUnits
+	}
+	return b.BFTStartTime.Add(time.Duration(units) * interval)
 }
 
 // roundScheduleUnits() returns cumulative 1, 3, 5, ... target intervals from the starting backoff level through step without overflowing.
@@ -1015,13 +1034,11 @@ func (b *BFT) StartRound() {
 		b.SetWaitTimers(b.WaitTime(Election, b.Round))
 		return
 	}
-	b.ProposerKey = SelectProposerWeightedRoundRobin(b.View, b.ValidatorSet.ValidatorSet, b.ValidatorSet.TotalPower)
 	b.Phase = Propose
 	b.phase.Store(int32(b.Phase))
 	b.roundDeadline = b.RoundDeadline(b.Round)
 	b.SetWaitTimers(time.Until(b.roundDeadline))
-	if len(b.ProposerKey) == 0 {
-		b.log.Error("unable to select deterministic proposer")
+	if !b.selectDeterministicProposer() {
 		return
 	}
 	if b.Round != 0 || b.roundZeroNewView {
@@ -1197,7 +1214,11 @@ func (b *BFT) WaitTime(phase Phase, round uint64) (waitTime time.Duration) {
 		waitTime = b.waitTime(60000, round)
 	case RoundInterrupt:
 		// Give replicas a configured window to exchange pacemaker votes before entering the next round.
-		waitTime = time.Duration(b.Config.RoundInterruptTimeoutMS) * time.Millisecond
+		if b.usesDeterministicProposers() {
+			waitTime = b.Config.ConsensusConfig.RoundInterruptTimeout()
+		} else {
+			waitTime = time.Duration(b.Config.RoundInterruptTimeoutMS) * time.Millisecond
+		}
 	case Pacemaker:
 		waitTime = 0
 	}

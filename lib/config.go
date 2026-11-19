@@ -99,7 +99,7 @@ func DefaultMainConfig() MainConfig {
 				Url:     "http://localhost:50002", // RooChainURL points to self
 			},
 		},
-		RunVDF:          false,         // checkpoints replace the VDF on the fast chain
+		RunVDF:          true,          // run the VDF by default
 		ChainId:         CanopyChainId, // default chain url is 1
 		Headless:        false,         // serve the web wallet and block explorer by default
 		AutoUpdate:      true,          // set it as default while in inmature state
@@ -225,25 +225,25 @@ const (
 	defaultRoundRobinBlockIntervalMS = 500
 	defaultBlockConsensusLeadTimeMS  = 175
 	defaultMaximumFutureBlockTimeMS  = 1000
+	defaultRoundInterruptTimeoutMS   = 250
 )
 
 // DefaultConsensusConfig() configures the block time
 func DefaultConsensusConfig() ConsensusConfig {
 	return ConsensusConfig{
-		NewHeightTimeoutMs:     500,
-		ElectionTimeoutMS:      100, // deterministic leader selection is local
-		ElectionVoteTimeoutMS:  500, // collect new-view votes / wait for proposal
-		ProposeTimeoutMS:       500, // proposal propagation failure detector
-		ProposeVoteTimeoutMS:   500, // proposal vote failure detector
-		PrecommitTimeoutMS:     500, // precommit propagation failure detector
-		PrecommitVoteTimeoutMS: 500, // precommit vote failure detector
-		CommitTimeoutMS:        500, // commit propagation failure detector
+		NewHeightTimeoutMs:     4500, // 4.5 seconds
+		ElectionTimeoutMS:      1500, // 1.5 seconds
+		ElectionVoteTimeoutMS:  1500, // 1.5 seconds
+		ProposeTimeoutMS:       2500, // 2.5 seconds
+		ProposeVoteTimeoutMS:   4000, // 4 seconds
+		PrecommitTimeoutMS:     2000, // 2 seconds
+		PrecommitVoteTimeoutMS: 2000, // 2 seconds
+		CommitTimeoutMS:        2000, // 2 seconds
 
 		ProposerMode:              ProposerModeVRF,
 		RoundRobinBlockIntervalMS: defaultRoundRobinBlockIntervalMS,
 		BlockConsensusLeadTimeMS:  defaultBlockConsensusLeadTimeMS,
 		MaximumFutureBlockTimeMS:  defaultMaximumFutureBlockTimeMS,
-		RoundInterruptTimeoutMS:   250, // collect pacemaker votes before the next round
 	}
 }
 
@@ -261,26 +261,42 @@ func (c *ConsensusConfig) UsesDeterministicProposers() bool {
 
 // RoundRobinBlockInterval() returns the coordinated round-zero pacing target, defaulting to 500 ms for old or zero-value configs.
 func (c *ConsensusConfig) RoundRobinBlockInterval() time.Duration {
-	if c == nil || c.RoundRobinBlockIntervalMS <= 0 {
-		return defaultRoundRobinBlockIntervalMS * time.Millisecond
+	if c == nil {
+		return durationMilliseconds(0, defaultRoundRobinBlockIntervalMS)
 	}
-	return time.Duration(c.RoundRobinBlockIntervalMS) * time.Millisecond
+	return durationMilliseconds(c.RoundRobinBlockIntervalMS, defaultRoundRobinBlockIntervalMS)
 }
 
 // BlockConsensusLeadTime returns the minimum proposal-to-timestamp budget used by stake-weighted round-robin.
 func (c *ConsensusConfig) BlockConsensusLeadTime() time.Duration {
-	if c == nil || c.BlockConsensusLeadTimeMS <= 0 {
-		return defaultBlockConsensusLeadTimeMS * time.Millisecond
+	if c == nil {
+		return durationMilliseconds(0, defaultBlockConsensusLeadTimeMS)
 	}
-	return time.Duration(c.BlockConsensusLeadTimeMS) * time.Millisecond
+	return durationMilliseconds(c.BlockConsensusLeadTimeMS, defaultBlockConsensusLeadTimeMS)
 }
 
 // MaximumFutureBlockTime returns the maximum accepted future timestamp used by stake-weighted round-robin.
 func (c *ConsensusConfig) MaximumFutureBlockTime() time.Duration {
-	if c == nil || c.MaximumFutureBlockTimeMS <= 0 {
-		return defaultMaximumFutureBlockTimeMS * time.Millisecond
+	if c == nil {
+		return durationMilliseconds(0, defaultMaximumFutureBlockTimeMS)
 	}
-	return time.Duration(c.MaximumFutureBlockTimeMS) * time.Millisecond
+	return durationMilliseconds(c.MaximumFutureBlockTimeMS, defaultMaximumFutureBlockTimeMS)
+}
+
+// RoundInterruptTimeout returns the deterministic pacemaker vote window.
+func (c *ConsensusConfig) RoundInterruptTimeout() time.Duration {
+	if c == nil {
+		return durationMilliseconds(0, defaultRoundInterruptTimeoutMS)
+	}
+	return durationMilliseconds(c.RoundInterruptTimeoutMS, defaultRoundInterruptTimeoutMS)
+}
+
+func durationMilliseconds(value, fallback int) time.Duration {
+	const maxMilliseconds = int64(math.MaxInt64) / int64(time.Millisecond)
+	if value <= 0 || int64(value) > maxMilliseconds {
+		value = fallback
+	}
+	return time.Duration(value) * time.Millisecond
 }
 
 // BlockTimeMS() returns the expected block time in milliseconds
@@ -388,8 +404,8 @@ type MempoolConfig struct {
 // DefaultMempoolConfig() returns the developer created Mempool options
 func DefaultMempoolConfig() MempoolConfig {
 	return MempoolConfig{
-		MaxTotalBytes:              uint64(64 * units.MB),      // buffer many full 500 ms blocks
-		MaxTransactionCount:        250000,                     // roughly 25 seconds at 10K TPS
+		MaxTotalBytes:              uint64(10 * units.MB),      // 10 MB max size
+		MaxTransactionCount:        5000,                       // 5000 max transactions
 		IndividualMaxTxSize:        uint32(4 * units.Kilobyte), // 4 KB max individual tx size
 		DropPercentage:             35,                         // drop 35% if limits are reached
 		LazyMempoolCheckFrequencyS: 2,                          // check every 2 seconds

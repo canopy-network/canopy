@@ -3,6 +3,7 @@ package bft
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"math/big"
 	"math/bits"
 	"sort"
@@ -117,9 +118,12 @@ func SelectProposerFromCandidates(candidates []VRFCandidate, data *lib.Sortition
 }
 
 // SelectProposerWeightedRoundRobin() maps a deterministic chain-and-view schedule into the validator set's canonical stake intervals.
-func SelectProposerWeightedRoundRobin(view *lib.View, validators *lib.ConsensusValidators, totalPower uint64) []byte {
-	if view == nil || validators == nil || len(validators.ValidatorSet) == 0 || totalPower == 0 {
-		return nil
+func SelectProposerWeightedRoundRobin(view *lib.View, validators *lib.ConsensusValidators, totalPower uint64) ([]byte, error) {
+	if view == nil {
+		return nil, fmt.Errorf("select deterministic proposer: nil view")
+	}
+	if validators == nil || len(validators.ValidatorSet) == 0 || totalPower == 0 {
+		return nil, fmt.Errorf("select deterministic proposer: empty validator set")
 	}
 	// Canonicalize validators so root-chain slice ordering cannot change the schedule or stake intervals.
 	canonicalSet := append([]*lib.ConsensusValidator(nil), validators.ValidatorSet...)
@@ -134,23 +138,26 @@ func SelectProposerWeightedRoundRobin(view *lib.View, validators *lib.ConsensusV
 	})
 	var actualPower uint64
 	for _, validator := range canonicalSet {
-		if validator == nil || validator.VotingPower > ^uint64(0)-actualPower {
-			return nil
+		if validator == nil {
+			return nil, fmt.Errorf("select deterministic proposer: nil validator")
+		}
+		if validator.VotingPower > ^uint64(0)-actualPower {
+			return nil, fmt.Errorf("select deterministic proposer: voting power overflow")
 		}
 		actualPower += validator.VotingPower
 	}
 	if actualPower != totalPower {
-		return nil
+		return nil, fmt.Errorf("select deterministic proposer: total power mismatch: expected %d, got %d", totalPower, actualPower)
 	}
 	powerIndex := weightedRoundRobinPowerIndex(view, totalPower)
 	var powerCount uint64
 	for _, validator := range canonicalSet {
 		powerCount += validator.VotingPower
 		if powerCount > powerIndex {
-			return validator.PublicKey
+			return validator.PublicKey, nil
 		}
 	}
-	return nil
+	return nil, fmt.Errorf("select deterministic proposer: no validator for power index %d", powerIndex)
 }
 
 // weightedRoundRobinPowerIndex() maps a consensus view into the validator set's total voting-power range.

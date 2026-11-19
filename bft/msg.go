@@ -87,46 +87,65 @@ func (b *BFT) deferFutureMessage(msg *Message) (bool, lib.ErrorI) {
 	if view == nil {
 		view = msg.GetQc().GetHeader()
 	}
-	b.Controller.Lock()
-	defer b.Controller.Unlock()
-	if view == nil || view.Height != b.Height+1 {
+	if view == nil {
 		return false, nil
 	}
-	height := view.Height
-	// Authenticate membership against the message's claimed committee snapshot before retaining it.
-	// Full view and proposal validation still waits until the local height has advanced.
-	validators := b.ValidatorSet
-	if view.RootHeight != b.RootHeight {
-		var err lib.ErrorI
-		validators, err = b.LoadCommittee(b.LoadRootChainId(b.Height), view.RootHeight)
-		if err != nil {
+	for {
+		b.Controller.Lock()
+		if view.Height != b.Height+1 {
+			b.Controller.Unlock()
+			return false, nil
+		}
+		height, rootHeight := b.Height, b.RootHeight
+		rootChainID, validators := b.LoadRootChainId(height), b.ValidatorSet
+		b.Controller.Unlock()
+
+		// Committee loading may perform network I/O, so never do it while holding the consensus lock.
+		if view.RootHeight != rootHeight {
+			var err lib.ErrorI
+			validators, err = b.LoadCommittee(rootChainID, view.RootHeight)
+			if err != nil {
+				return true, err
+			}
+		}
+		if _, err := validators.GetValidator(msg.Signature.PublicKey); err != nil {
 			return true, err
 		}
-	}
-	if _, err := validators.GetValidator(msg.Signature.PublicKey); err != nil {
-		return true, err
-	}
-	size := proto.Size(msg)
-	if len(b.futureMsgs) >= maxFutureMessages || size > maxFutureMessageBytes-b.futureBytes {
-		return true, lib.ErrWrongCertHeight(height, b.Height)
-	}
-	signerMessages := 0
-	for _, deferred := range b.futureMsgs {
-		if bytes.Equal(deferred.Signature.PublicKey, msg.Signature.PublicKey) {
-			signerMessages++
+		// Verify the signed payload before consuming the lookahead; full view validation runs after reset.
+		if err := checkSignature(msg.Signature, msg); err != nil {
+			return true, err
 		}
+
+		b.Controller.Lock()
+		if b.Height != height {
+			b.Controller.Unlock()
+			return false, nil
+		}
+		if b.RootHeight != rootHeight {
+			b.Controller.Unlock()
+			continue
+		}
+		size := proto.Size(msg)
+		if len(b.futureMsgs) >= maxFutureMessages || size > maxFutureMessageBytes-b.futureBytes {
+			b.Controller.Unlock()
+			return true, lib.ErrWrongCertHeight(view.Height, b.Height)
+		}
+		signerMessages := 0
+		for _, deferred := range b.futureMsgs {
+			if bytes.Equal(deferred.Signature.PublicKey, msg.Signature.PublicKey) {
+				signerMessages++
+			}
+		}
+		if signerMessages >= maxFutureMessagesPerSigner {
+			b.Controller.Unlock()
+			return true, lib.ErrWrongCertHeight(view.Height, b.Height)
+		}
+		b.futureMsgs = append(b.futureMsgs, msg)
+		b.futureHeight = view.Height
+		b.futureBytes += size
+		b.Controller.Unlock()
+		return true, nil
 	}
-	if signerMessages >= maxFutureMessagesPerSigner {
-		return true, lib.ErrWrongCertHeight(height, b.Height)
-	}
-	// Verify the signed payload before consuming the lookahead; full view validation runs after reset.
-	if err := checkSignature(msg.Signature, msg); err != nil {
-		return true, err
-	}
-	b.futureMsgs = append(b.futureMsgs, msg)
-	b.futureHeight = height
-	b.futureBytes += size
-	return true, nil
 }
 
 // takeFutureMessages() removes and returns buffered messages for the requested height.

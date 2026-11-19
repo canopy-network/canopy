@@ -32,7 +32,8 @@ func TestStartElectionPhase(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			c := newTestConsensus(t, Election, test.numValidators)
-			expected := SelectProposerWeightedRoundRobin(c.bft.View, c.valSet.ValidatorSet, c.valSet.TotalPower)
+			expected, err := SelectProposerWeightedRoundRobin(c.bft.View, c.valSet.ValidatorSet, c.valSet.TotalPower)
+			require.NoError(t, err)
 
 			c.bft.StartElectionPhase()
 
@@ -78,6 +79,17 @@ func TestRoundDeadlinesAreTimestampAnchoredAndBackOff(t *testing.T) {
 	require.Equal(t, anchor.Add(750*time.Millisecond), c.bft.RoundDeadline(0))
 	require.Equal(t, anchor.Add(3*time.Second), c.bft.RoundDeadline(1))
 	require.Equal(t, anchor.Add(6750*time.Millisecond), c.bft.RoundDeadline(2))
+}
+
+func TestRoundDeadlineSaturatesDurationOverflow(t *testing.T) {
+	c := newTestConsensus(t, Propose, 4)
+	maxIntervalMS := int(int64(^uint64(0)>>1) / int64(time.Millisecond))
+	c.bft.Config.RoundRobinBlockIntervalMS = maxIntervalMS
+	anchor := time.Unix(0, 0)
+	c.bft.SetHeightAnchor(anchor)
+
+	interval := c.bft.Config.ConsensusConfig.RoundRobinBlockInterval()
+	require.Equal(t, anchor.Add(interval), c.bft.RoundDeadline(1))
 }
 
 // TestForcedRoundDeadlineUsesRequestedTimeoutSchedule() verifies forced rounds use the requested timeout schedule.
@@ -315,7 +327,8 @@ func TestStartElectionVotePhase(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			c := newTestConsensus(t, ElectionVote, test.numValidators)
-			expectedProposer := SelectProposerWeightedRoundRobin(c.bft.View, c.valSet.ValidatorSet, c.valSet.TotalPower)
+			expectedProposer, err := SelectProposerWeightedRoundRobin(c.bft.View, c.valSet.ValidatorSet, c.valSet.TotalPower)
+			require.NoError(t, err)
 			c.bft.ProposerKey = expectedProposer
 			expectedDoubleSignEvidence := DoubleSignEvidences{}
 			if test.hasBE {

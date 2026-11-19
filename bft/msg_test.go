@@ -280,6 +280,39 @@ func TestNextHeightMessageWaitsForBlockReset(t *testing.T) {
 	require.Zero(t, c.bft.futureBytes)
 }
 
+func TestNextHeightCommitteeLoadDoesNotHoldControllerLock(t *testing.T) {
+	c := newTestConsensus(t, Propose, 3)
+	c.cont.loadCommitteeStarted = make(chan struct{}, 1)
+	c.cont.loadCommitteeRelease = make(chan struct{})
+	msg := &Message{Header: c.view(Propose)}
+	msg.Header.Height++
+	msg.Header.RootHeight++
+	require.NoError(t, msg.Sign(c.valKeys[0]))
+
+	done := make(chan lib.ErrorI, 1)
+	go func() { done <- c.bft.HandleMessage(msg) }()
+	select {
+	case <-c.cont.loadCommitteeStarted:
+	case <-time.After(testTimeout):
+		t.Fatal("committee load did not start")
+	}
+
+	lockAcquired := make(chan struct{})
+	go func() {
+		c.cont.Lock()
+		close(lockAcquired)
+		c.cont.Unlock()
+	}()
+	select {
+	case <-lockAcquired:
+	case <-time.After(testTimeout):
+		t.Fatal("controller lock held during committee load")
+	}
+
+	close(c.cont.loadCommitteeRelease)
+	require.NoError(t, <-done)
+}
+
 // TestNextHeightMessageRejectedWhenFutureBufferIsFull() verifies the future-message buffer remains bounded.
 func TestNextHeightMessageRejectedWhenFutureBufferIsFull(t *testing.T) {
 	c := newTestConsensus(t, Propose, 3)

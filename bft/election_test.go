@@ -195,7 +195,8 @@ func TestSelectProposerWeightedRoundRobin(t *testing.T) {
 	heightCounts := make(map[string]int)
 	for height := uint64(1); height <= samples; height++ {
 		view.Height, view.Round = height, 0
-		proposer := SelectProposerWeightedRoundRobin(view, validators, totalPower)
+		proposer, err := SelectProposerWeightedRoundRobin(view, validators, totalPower)
+		require.NoError(t, err)
 		heightCounts[string(proposer)]++
 	}
 	require.InDelta(t, float64(samples/6), heightCounts["validator-a"], tolerance)
@@ -207,7 +208,8 @@ func TestSelectProposerWeightedRoundRobin(t *testing.T) {
 	view.Height = 10
 	for round := uint64(0); round < samples; round++ {
 		view.Round = round
-		proposer := SelectProposerWeightedRoundRobin(view, validators, totalPower)
+		proposer, err := SelectProposerWeightedRoundRobin(view, validators, totalPower)
+		require.NoError(t, err)
 		roundCounts[string(proposer)]++
 	}
 	require.InDelta(t, float64(samples/6), roundCounts["validator-a"], tolerance)
@@ -215,11 +217,15 @@ func TestSelectProposerWeightedRoundRobin(t *testing.T) {
 	require.InDelta(t, float64(samples/2), roundCounts["validator-c"], tolerance)
 
 	view.Height, view.Round = 42, 3
-	first := SelectProposerWeightedRoundRobin(view, validators, totalPower)
-	second := SelectProposerWeightedRoundRobin(view, validators, totalPower)
+	first, err := SelectProposerWeightedRoundRobin(view, validators, totalPower)
+	require.NoError(t, err)
+	second, err := SelectProposerWeightedRoundRobin(view, validators, totalPower)
+	require.NoError(t, err)
 	require.Equal(t, first, second)
-	require.Nil(t, SelectProposerWeightedRoundRobin(view, validators, totalPower+1))
-	require.Nil(t, SelectProposerWeightedRoundRobin(nil, validators, totalPower))
+	_, err = SelectProposerWeightedRoundRobin(view, validators, totalPower+1)
+	require.ErrorContains(t, err, "total power mismatch")
+	_, err = SelectProposerWeightedRoundRobin(nil, validators, totalPower)
+	require.ErrorContains(t, err, "nil view")
 }
 
 // TestSelectProposerWeightedRoundRobinStakeEditDoesNotRekeySchedule() verifies stake edits do not re-key the proposer schedule.
@@ -250,10 +256,11 @@ func TestSelectProposerWeightedRoundRobinIgnoresValidatorInputOrder(t *testing.T
 	for height := uint64(1); height <= 12; height++ {
 		for round := uint64(0); round < 6; round++ {
 			view.Height, view.Round = height, round
-			require.Equal(t,
-				SelectProposerWeightedRoundRobin(view, firstOrder, 6),
-				SelectProposerWeightedRoundRobin(view, secondOrder, 6),
-			)
+			first, err := SelectProposerWeightedRoundRobin(view, firstOrder, 6)
+			require.NoError(t, err)
+			second, err := SelectProposerWeightedRoundRobin(view, secondOrder, 6)
+			require.NoError(t, err)
+			require.Equal(t, first, second)
 		}
 	}
 }
@@ -272,7 +279,8 @@ func TestSelectProposerWeightedRoundRobinDoesNotPinSubThirdValidator(t *testing.
 		var previous []byte
 		for round := uint64(0); round < 20_000; round++ {
 			view.Round = round
-			proposer := SelectProposerWeightedRoundRobin(view, validators, 4)
+			proposer, err := SelectProposerWeightedRoundRobin(view, validators, 4)
+			require.NoError(t, err)
 			if previous != nil {
 				require.NotEqual(t, previous, proposer, "chain %d pinned proposer at round %d", chainID, round)
 			}
@@ -283,7 +291,8 @@ func TestSelectProposerWeightedRoundRobinDoesNotPinSubThirdValidator(t *testing.
 		previous = nil
 		for height := uint64(1); height <= 20_000; height++ {
 			view.Height = height
-			proposer := SelectProposerWeightedRoundRobin(view, validators, 4)
+			proposer, err := SelectProposerWeightedRoundRobin(view, validators, 4)
+			require.NoError(t, err)
 			if previous != nil {
 				require.NotEqual(t, previous, proposer, "chain %d pinned proposer at height %d", chainID, height)
 			}

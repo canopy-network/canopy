@@ -494,6 +494,8 @@ type testController struct {
 	committeeData        *lib.CommitteeData
 	loadCommitteeErr     lib.ErrorI
 	loadCommitteeDataErr lib.ErrorI
+	loadCommitteeStarted chan struct{}
+	loadCommitteeRelease chan struct{}
 	proposalTime         uint64
 }
 
@@ -545,6 +547,12 @@ func (t *testController) ValidateProposal(_ uint64, qc *lib.QuorumCertificate, _
 }
 
 func (t *testController) LoadCommittee(rootChainId, rootHeight uint64) (lib.ValidatorSet, lib.ErrorI) {
+	if t.loadCommitteeStarted != nil {
+		t.loadCommitteeStarted <- struct{}{}
+	}
+	if t.loadCommitteeRelease != nil {
+		<-t.loadCommitteeRelease
+	}
 	if t.loadCommitteeErr != nil {
 		return lib.ValidatorSet{}, t.loadCommitteeErr
 	}

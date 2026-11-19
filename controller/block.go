@@ -789,7 +789,7 @@ func (c *Controller) currentProposalVoteConfig() fsm.GovProposalVoteConfig {
 		return fsm.GovProposalVoteConfig_APPROVE_LIST
 	}
 	// if consensus is below round 3 AND it hasn't been more than 3 block times since the last block
-	if c.Consensus.CurrentRound() < 3 {
+	if c.Consensus.CurrentRound() < bft.ProposalVoteApproveListRoundLimit {
 		deadline := c.Consensus.ProposalVoteDeadlineUnixMilli()
 		if deadline != 0 && time.Now().UnixMilli() < deadline {
 			return fsm.GovProposalVoteConfig_APPROVE_LIST
