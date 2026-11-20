@@ -280,6 +280,76 @@ func TestCertificateCheckBasicAllowsNilResults(t *testing.T) {
 	require.NoError(t, qc.CheckBasic())
 }
 
+func TestEqualPayloads(t *testing.T) {
+	base := &QuorumCertificate{
+		Header:      &View{Height: 7},
+		ProposerKey: []byte("proposer"),
+		BlockHash:   crypto.Hash([]byte("block")),
+		ResultsHash: crypto.Hash([]byte("results")),
+		Signature:   &AggregateSignature{Signature: []byte("sig-a"), Bitmap: []byte("bm-a")},
+	}
+	samePayloadDifferentSig := &QuorumCertificate{
+		Header:      &View{Height: 7},
+		ProposerKey: []byte("proposer"),
+		BlockHash:   crypto.Hash([]byte("block")),
+		ResultsHash: crypto.Hash([]byte("results")),
+		Signature:   &AggregateSignature{Signature: []byte("sig-b"), Bitmap: []byte("bm-b")},
+	}
+	tests := []struct {
+		name    string
+		qc      *QuorumCertificate
+		compare *QuorumCertificate
+		equal   bool
+	}{
+		{
+			name:    "matching payloads ignore signatures",
+			qc:      base,
+			compare: samePayloadDifferentSig,
+			equal:   true,
+		},
+		{
+			name:    "nil compare",
+			qc:      base,
+			compare: nil,
+			equal:   false,
+		},
+		{
+			name:    "nil compare header",
+			qc:      base,
+			compare: &QuorumCertificate{Header: nil, ProposerKey: base.ProposerKey, BlockHash: base.BlockHash, ResultsHash: base.ResultsHash},
+			equal:   false,
+		},
+		{
+			name:    "nil receiver",
+			qc:      nil,
+			compare: base,
+			equal:   false,
+		},
+		{
+			name:    "nil receiver header",
+			qc:      &QuorumCertificate{Header: nil},
+			compare: base,
+			equal:   false,
+		},
+		{
+			name: "different height",
+			qc:   base,
+			compare: &QuorumCertificate{
+				Header:      &View{Height: 8},
+				ProposerKey: base.ProposerKey,
+				BlockHash:   base.BlockHash,
+				ResultsHash: base.ResultsHash,
+			},
+			equal: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.equal, tt.qc.EqualPayloads(tt.compare))
+		})
+	}
+}
+
 func TestCertificateResultsCheckBasic(t *testing.T) {
 	tests := []struct {
 		name   string

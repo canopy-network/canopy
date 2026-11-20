@@ -248,9 +248,12 @@ func (x *QuorumCertificate) SignBytes() (signBytes []byte) {
 
 // EqualPayloads() compares the payloads only of two certs (can have different signatures)
 func (x *QuorumCertificate) EqualPayloads(compare *QuorumCertificate) bool {
+	// a missing certificate or header is not a matching payload
+	if x == nil || x.Header == nil || compare == nil || compare.Header == nil {
+		return false
+	}
 	// returns if both certificates have the same height, proposer key, block hash and result hash
-	return x != nil && x.Header != nil &&
-		bytes.Equal(x.ProposerKey, compare.ProposerKey) &&
+	return bytes.Equal(x.ProposerKey, compare.ProposerKey) &&
 		x.Header.Height == compare.Header.Height &&
 		bytes.Equal(x.BlockHash, compare.BlockHash) &&
 		bytes.Equal(x.ResultsHash, compare.ResultsHash)
