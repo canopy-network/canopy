@@ -30,6 +30,7 @@ jobs:
         id: compute
         env:
           VERSION: ${{ github.event.inputs.tag }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PREFIX="plugin-csharp-v"
           # Back-compat: accept the full tag form (e.g. plugin-csharp-v1.0.4) too, not just
@@ -38,7 +39,7 @@ jobs:
           # Tolerate a bare "v" prefix (e.g. v1.0.4) so the tag isn't doubled below.
           VERSION="${VERSION#v}"
           # Validate via the shared script (same semver check as the auto-updater).
-          go run ./cmd/scripts/semver "$VERSION"
+          go run ./cmd/scripts/semver --stream plugin "$VERSION"
           echo "tag=${PREFIX}${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Version '$VERSION' is valid. Release tag: ${PREFIX}${VERSION}"
 
@@ -89,6 +90,8 @@ jobs:
         with:
           tag_name: ${{ needs.validate.outputs.tag }}
           name: "C# Plugin ${{ needs.validate.outputs.tag }}"
+          # Keep the repo "Latest" label on the newest core release, not on plugins.
+          make_latest: false
           body: |
             C# Plugin Release ${{ needs.validate.outputs.tag }}
             
@@ -104,6 +107,22 @@ jobs:
             ### Alpine Linux (musl) - Docker containers
             - `csharp-plugin-linux-musl-x64.tar.gz` - Alpine x86_64
             - `csharp-plugin-linux-musl-arm64.tar.gz` - Alpine ARM64
+          files: |
+            plugin/csharp/release/csharp-plugin-linux-x64.tar.gz
+            plugin/csharp/release/csharp-plugin-linux-arm64.tar.gz
+            plugin/csharp/release/csharp-plugin-linux-musl-x64.tar.gz
+            plugin/csharp/release/csharp-plugin-linux-musl-arm64.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Rolling release consumed by the auto-updater. The fixed "latest-plugin"
+      # tag always points at the newest plugin release; the version is embedded
+      # in the release name.
+      - name: Update rolling latest-plugin release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-plugin
+          name: ${{ needs.validate.outputs.tag }}
           files: |
             plugin/csharp/release/csharp-plugin-linux-x64.tar.gz
             plugin/csharp/release/csharp-plugin-linux-arm64.tar.gz

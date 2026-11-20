@@ -20,9 +20,15 @@ import (
 
 var githubAPIBaseURL = "https://api.github.com"
 
+// pluginReleaseTag is the fixed tag of the rolling plugin release that the
+// auto-updater consumes. CI re-points this tag at the newest plugin release and
+// embeds the plugin version in the release name (e.g. "plugin-go-v1.2.3").
+const pluginReleaseTag = "latest-plugin"
+
 // GithubRelease represents a GitHub release with the used metadata
 type GithubRelease struct {
 	TagName    string `json:"tag_name"`
+	Name       string `json:"name"`
 	Draft      bool   `json:"draft"`
 	Prerelease bool   `json:"prerelease"`
 	Assets     []struct {
@@ -105,38 +111,28 @@ func (rm *ReleaseManager) Check() (*Release, error) {
 	return release, nil
 }
 
-// GetLatestRelease returns the latest release from the GitHub API
+// GetLatestRelease returns the latest release for the configured stream. CLI
+// and plugin releases are looked up differently: the CLI lists the repository
+// releases and selects the newest that ships the CLI asset, while plugins read
+// the rolling "latest-plugin" release directly by its fixed tag.
 func (rm *ReleaseManager) GetLatestRelease() (*Release, error) {
-	// Query the releases list and select the newest release that contains the
-	// expected asset. This keeps CLI and plugin streams isolated even when a
-	// repository publishes both kinds of releases.
+	if rm.config.Type == ReleaseTypePlugin {
+		return rm.getLatestPluginRelease()
+	}
+	return rm.getLatestCLIRelease()
+}
+
+// getLatestCLIRelease lists the repository releases and returns the newest
+// non-draft, non-prerelease release that ships the CLI asset for this platform.
+// This ignores plugin releases (they do not carry a cli-* asset).
+func (rm *ReleaseManager) getLatestCLIRelease() (*Release, error) {
 	apiURL, err := url.JoinPath(githubAPIBaseURL, "repos",
 		rm.config.RepoOwner, rm.config.RepoName, "releases")
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	// github recommends to add an user agent to any API request
-	req.Header.Set("User-Agent", "canopy-updater/1.0")
-	if token := rm.config.GithubApiToken; token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-	// make the request
-	resp, err := rm.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	// check the response status code
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
-	}
-	// parse the response
 	var releases []GithubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
+	if err := rm.getJSON(apiURL, &releases); err != nil {
 		return nil, err
 	}
 	// find the first non-draft, non-prerelease with a matching asset. GitHub
@@ -155,11 +151,56 @@ func (rm *ReleaseManager) GetLatestRelease() (*Release, error) {
 			}
 		}
 	}
-	// return based on tagName
-	if rm.config.Type == ReleaseTypeCLI {
-		return nil, fmt.Errorf("no matching asset found for CLI (looking for %s)", targetName)
+	return nil, fmt.Errorf("no matching asset found for CLI (looking for %s)", targetName)
+}
+
+// getLatestPluginRelease fetches the rolling plugin release by its fixed tag and
+// returns the asset for this platform. The plugin version is read from the
+// release name (e.g. "plugin-go-v1.2.3") because the tag itself is fixed;
+// ShouldUpdate parses that name the same way it parsed prefixed tags before.
+func (rm *ReleaseManager) getLatestPluginRelease() (*Release, error) {
+	apiURL, err := url.JoinPath(githubAPIBaseURL, "repos",
+		rm.config.RepoOwner, rm.config.RepoName, "releases", "tags", pluginReleaseTag)
+	if err != nil {
+		return nil, err
+	}
+	var rel GithubRelease
+	if err := rm.getJSON(apiURL, &rel); err != nil {
+		return nil, err
+	}
+	targetName := rm.getAssetName()
+	for _, asset := range rel.Assets {
+		if asset.Name == targetName {
+			return &Release{
+				Version:     rel.Name,
+				DownloadURL: asset.BrowserDownloadURL,
+			}, nil
+		}
 	}
 	return nil, fmt.Errorf("no matching asset found for plugin (looking for %s)", targetName)
+}
+
+// getJSON performs an authenticated GET request against the GitHub API and
+// decodes the JSON response body into v.
+func (rm *ReleaseManager) getJSON(apiURL string, v any) error {
+	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
+	if err != nil {
+		return err
+	}
+	// github recommends to add an user agent to any API request
+	req.Header.Set("User-Agent", "canopy-updater/1.0")
+	if token := rm.config.GithubApiToken; token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := rm.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status code %d", resp.StatusCode)
+	}
+	return json.NewDecoder(resp.Body).Decode(v)
 }
 
 // isMuslLibc detects if the system uses musl libc (Alpine Linux)
