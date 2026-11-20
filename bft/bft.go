@@ -126,12 +126,14 @@ func (b *BFT) Start() {
 	// load the committee from the base chain
 	b.ValidatorSet, err = b.Controller.LoadCommittee(b.LoadRootChainId(b.ChainHeight()), b.Controller.RootChainHeight())
 	if err != nil {
-		b.log.Warn(err.Error())
+		b.log.Error(err.Error())
+		return
 	}
 	// load the committee data
 	b.CommitteeData, err = b.Controller.LoadCommitteeData()
 	if err != nil {
-		b.log.Warn(err.Error())
+		b.log.Error(err.Error())
+		return
 	}
 	for {
 		select {
