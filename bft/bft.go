@@ -282,6 +282,14 @@ func (b *BFT) StartElectionPhase() {
 // - With this vote, the Replica attaches any Byzantine evidence or 'Locked' QC they have collected as well as their VDF output
 func (b *BFT) StartElectionVotePhase() {
 	b.log.Info(b.View.ToString())
+	// StartElectionPhase may have returned early (for example if the self validator or the last
+	// proposers could not be loaded), which leaves the sortition data nil. The phase advances
+	// regardless, so bail out to a round interrupt instead of dereferencing nil below.
+	if b.SortitionData == nil {
+		b.log.Error("Sortition data is nil, the election phase did not complete")
+		b.RoundInterrupt()
+		return
+	}
 	// get the candidates from messages received
 	candidates := b.GetElectionCandidates()
 	if len(candidates) == 0 {
