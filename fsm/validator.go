@@ -292,6 +292,14 @@ func (s *StateMachine) DeleteValidator(validator *Validator) lib.ErrorI {
 		if err := s.DeleteCommittees(addr, validator.StakedAmount, validator.Committees); err != nil {
 			return err
 		}
+		// protocol v3+: drop liveness ('active') status for all committees since the validator is gone
+		if s.IsFeatureEnabled(3) {
+			for _, chainId := range validator.Committees {
+				if err := s.DeleteCommitteeMemberActive(chainId, addr); err != nil {
+					return err
+				}
+			}
+		}
 	}
 	// delete the validator from state
 	return s.Delete(KeyForValidator(addr))
@@ -521,19 +529,28 @@ func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.Va
 	observeStage("sort", sortStartTime)
 	// create a variable to hold the committee members
 	members := make([]*lib.ConsensusValidator, 0)
-	// determine slice size — if MaxCommitteeSize == 0, use all
-	limit := uint64(len(filtered))
-	if maxPerCommittee > 0 {
-		limit = min(uint64(len(filtered)), maxPerCommittee)
-	}
-	// for each validator up to the limit
 	buildMembersStartTime := time.Now()
-	for _, v := range filtered[:limit] {
-		members = append(members, &lib.ConsensusValidator{
-			PublicKey:   v.PublicKey,
-			VotingPower: v.StakedAmount,
-			NetAddress:  v.NetAddress,
-		})
+	// protocol v3+: apply committee-member liveness gating (consensus set only, not delegates); a member
+	// that hasn't proven liveness joins with zero power until it signs a QC, so it can't break the quorum
+	gated, e := s.buildGatedCommitteeMembers(chainId, delegate, filtered, maxPerCommittee)
+	if e != nil {
+		return vs, e
+	}
+	if gated != nil {
+		members = gated
+	} else {
+		// legacy / bootstrap / delegate path: every member receives its full stake as voting power
+		limit := uint64(len(filtered))
+		if maxPerCommittee > 0 {
+			limit = min(uint64(len(filtered)), maxPerCommittee)
+		}
+		for _, v := range filtered[:limit] {
+			members = append(members, &lib.ConsensusValidator{
+				PublicKey:   v.PublicKey,
+				VotingPower: v.StakedAmount,
+				NetAddress:  v.NetAddress,
+			})
+		}
 	}
 	observeStage("build_members", buildMembersStartTime)
 	// convert list to a validator set (includes shared public key)
@@ -541,6 +558,67 @@ func (s *StateMachine) getValidatorSet(chainId uint64, delegate bool) (vs lib.Va
 	vs, err = lib.NewValidatorSet(&lib.ConsensusValidators{ValidatorSet: members}, delegate)
 	observeStage("new_validator_set", newValidatorSetStartTime)
 	return
+}
+
+// buildGatedCommitteeMembers() applies protocol v3+ liveness gating, listing active members (full power)
+// before provisional ones (zero power) so provisional members can't displace an active member.
+// Returns (nil, nil) to signal a legacy full-power fallback when: it is a delegate set, the v3 feature is
+// off, or the committee has no active members yet (bootstrap, so it can produce a first QC).
+func (s *StateMachine) buildGatedCommitteeMembers(chainId uint64, delegate bool, filtered []*Validator, maxPerCommittee uint64) ([]*lib.ConsensusValidator, lib.ErrorI) {
+	// gating only applies to the consensus (non-delegate) set under protocol v3+
+	if delegate || !s.IsFeatureEnabled(3) {
+		return nil, nil
+	}
+	// load the set of liveness-proven ('active') members for this committee
+	active, err := s.GetActiveCommitteeMemberSet(chainId)
+	if err != nil {
+		return nil, err
+	}
+	// determine whether any current member has proven liveness; if none, bootstrap with full power
+	anyActive := false
+	for _, v := range filtered {
+		if _, ok := active[string(v.Address)]; ok {
+			anyActive = true
+			break
+		}
+	}
+	if !anyActive {
+		return nil, nil
+	}
+	// build the gated member list: active members (full power) first, then provisional members (zero power)
+	members := make([]*lib.ConsensusValidator, 0, len(filtered))
+	var activeCount, provisionalCount uint64
+	// active members carry their full stake as voting power (capped by maxPerCommittee)
+	for _, v := range filtered {
+		if _, ok := active[string(v.Address)]; !ok {
+			continue
+		}
+		if maxPerCommittee > 0 && activeCount >= maxPerCommittee {
+			break
+		}
+		activeCount++
+		members = append(members, &lib.ConsensusValidator{
+			PublicKey:   v.PublicKey,
+			VotingPower: v.StakedAmount,
+			NetAddress:  v.NetAddress,
+		})
+	}
+	// provisional members are included (so they can vote and prove liveness) but carry zero voting power
+	for _, v := range filtered {
+		if _, ok := active[string(v.Address)]; ok {
+			continue
+		}
+		if maxPerCommittee > 0 && provisionalCount >= maxPerCommittee {
+			break
+		}
+		provisionalCount++
+		members = append(members, &lib.ConsensusValidator{
+			PublicKey:   v.PublicKey,
+			VotingPower: 0,
+			NetAddress:  v.NetAddress,
+		})
+	}
+	return members, nil
 }
 
 // pubKeyBytesToAddress() is a convenience function that converts a public key to an address

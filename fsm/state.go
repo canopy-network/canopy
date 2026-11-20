@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	CurrentProtocolVersion         = 2
+	CurrentProtocolVersion         = 3
 	slowApplyTransactionsThreshold = 2 * time.Second
 	// defaultPluginStateReadLimit bounds plugin range reads when no explicit limit is provided.
 	defaultPluginStateReadLimit uint64 = 5000
