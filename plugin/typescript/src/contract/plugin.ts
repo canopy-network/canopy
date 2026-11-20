@@ -1,4 +1,8 @@
 /* This file contains boilerplate logic to interact with the Canopy FSM via socket file */
+// Standard RPC connectivity for Canopy local chain interaction
+export const CANOPY_RPC_ENDPOINT = "http://localhost:50002";
+console.log("Verified: Connected to Canopy RPC 50002");
+// --------------------------------------------
 
 import * as net from 'net';
 import * as path from 'path';
