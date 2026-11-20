@@ -43,8 +43,8 @@ var (
 	orderBookPrefix        = []byte{13} // store key prefix for 'sell orders' before they are bid on
 	retiredCommitteePrefix = []byte{14} // store key prefix for 'retired' (dead) committees
 	dexPrefix              = []byte{15} // store key prefix for 'dex' functionality
-	lockedBatchSegment = []byte{1}
-	nextBatchSement    = []byte{2}
+	lockedBatchSegment     = []byte{1}
+	nextBatchSegment       = []byte{2}
 )
 
 /*
@@ -108,7 +108,7 @@ func KeyForLockedBatch(chainId uint64) []byte {
 }
 
 func KeyForNextBatch(chainId uint64) []byte {
-	return lib.JoinLenPrefix(dexPrefix, nextBatchSement, formatUint64(chainId))
+	return lib.JoinLenPrefix(dexPrefix, nextBatchSegment, formatUint64(chainId))
 }
 
 func AddressFromKey(k []byte) (crypto.AddressI, lib.ErrorI) {
