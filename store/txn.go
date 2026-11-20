@@ -202,7 +202,7 @@ func (t *Txn) Close() lib.ErrorI {
 			return err
 		}
 	}
-	// the same underlying struct can satisfy both interfaces, on such case Close() is only called
+	// the same underlying struct can satisfy both interfaces; in that case Close() is only called
 	// once to prevent double closing
 	if any(t.reader) == any(t.writer) { // compares the pointers to check if they are the same
 		return nil
