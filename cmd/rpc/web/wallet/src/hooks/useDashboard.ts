@@ -184,7 +184,14 @@ export const useDashboard = () => {
         ]);
 
         for (const item of extractItems(received as TxPage | null)) {
-          upsertTx(makeTx(item, { type: "receive" }), address);
+          // Keep wallet-originated transactions consistent regardless of response order.
+          const isWalletSender =
+            typeof item.sender === "string" &&
+            allAddresses.includes(item.sender);
+          upsertTx(
+            makeTx(item, { type: isWalletSender ? undefined : "receive" }),
+            address,
+          );
         }
         for (const item of extractItems(sent as TxPage | null)) {
           upsertTx(makeTx(item), address);
