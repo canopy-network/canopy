@@ -1177,7 +1177,28 @@ func (x *node) replaceChild(oldKey, newKey []byte) {
 }
 
 // copy() returns a shallow copy of the node
-func (x *node) copy() *node { return &(*x) }
+//
+// The node struct is rebuilt field by field rather than dereferenced and
+// re-addressed: `&(*x)` is simply `x` and returns the original pointer, and a
+// plain `*x` struct copy would copy the protobuf MessageState embedded in
+// lib.Node (a lock copy, reported by `go vet`). The byte slices and the *key
+// are shared with the original, which is what "shallow" means here.
+func (x *node) copy() *node {
+	if x == nil {
+		return nil
+	}
+	return &node{
+		Key: x.Key,
+		Node: lib.Node{
+			Value:         x.Node.Value,
+			LeftChildKey:  x.Node.LeftChildKey,
+			RightChildKey: x.Node.RightChildKey,
+			Key:           x.Node.Key,
+			Bitmask:       x.Node.Bitmask,
+		},
+		delete: x.delete,
+	}
+}
 
 // NODE LIST CODE BELOW
 
