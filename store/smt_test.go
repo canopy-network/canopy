@@ -1316,7 +1316,9 @@ func TestNewSMT(t *testing.T) {
 				}
 			}
 			// execute the function call
-			_ = NewSMT(RootKey, MaxKeyBitLength, memStore)
+			smt, err := NewSMT(RootKey, MaxKeyBitLength, memStore)
+			require.NoError(t, err)
+			_ = smt
 			// create an iterator to check out the values of the store
 			it, err := memStore.Iterator(nil)
 			require.NoError(t, err)
@@ -2039,9 +2041,13 @@ func NewTestSMT(t *testing.T, preset *NodeList, root []byte, keyBitSize int) (*S
 	// if there's no preset - use the default 3 nodes
 	if preset == nil {
 		if root != nil {
-			return NewSMT(root, keyBitSize, memStore), memStore
+			smt, err := NewSMT(root, keyBitSize, memStore)
+			require.NoError(t, err)
+			return smt, memStore
 		}
-		return NewSMT(RootKey, keyBitSize, memStore), memStore
+		smt, err := NewSMT(RootKey, keyBitSize, memStore)
+		require.NoError(t, err)
+		return smt, memStore
 	}
 	// create the smt
 	smt := &SMT{

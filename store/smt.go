@@ -2,6 +2,7 @@ package store
 
 import (
 	"bytes"
+	"fmt"
 	"math/bits"
 	"sort"
 
@@ -146,13 +147,12 @@ type OpData struct {
 }
 
 // NewDefaultSMT() creates a new abstraction fo the SMT object using default parameters
-func NewDefaultSMT(store lib.RWStoreI) (smt *SMT) {
+func NewDefaultSMT(store lib.RWStoreI) (smt *SMT, err lib.ErrorI) {
 	return NewSMT(RootKey, MaxKeyBitLength, store)
 }
 
 // NewSMT() creates a new abstraction of the SMT object
-func NewSMT(rootKey []byte, keyBitLen int, store lib.RWStoreI) (smt *SMT) {
-	var err lib.ErrorI
+func NewSMT(rootKey []byte, keyBitLen int, store lib.RWStoreI) (smt *SMT, err lib.ErrorI) {
 	// create a new smt object
 	smt = &SMT{
 		store:        store,
@@ -166,17 +166,19 @@ func NewSMT(rootKey []byte, keyBitLen int, store lib.RWStoreI) (smt *SMT) {
 	// get the root from the store
 	smt.root, err = smt.getNode(rKey.bytes())
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	// if the root is empty, initialize with min and max node
 	if smt.root.LeftChildKey == nil {
-		smt.initializeTree(rKey)
+		if err = smt.initializeTree(rKey); err != nil {
+			return nil, err
+		}
 	}
 	// initialize the operations list
 	smt.unsortedOps = make(map[string]*node)
 	// prepare for traversal
 	smt.reset()
-	return
+	return smt, nil
 }
 
 // Root() returns the root value of the smt
@@ -366,7 +368,9 @@ func (s *SMT) set() lib.ErrorI {
 		// calculate current's bytes by encoding
 		currentBytes, targetBytes := s.current.Key.bytes(), s.target.Key.bytes()
 		// replace the reference to Current in its parent with the new parent
-		oldParent.replaceChild(currentBytes, newParent.Key.bytes())
+		if err := oldParent.replaceChild(currentBytes, newParent.Key.bytes()); err != nil {
+			return err
+		}
 		// set current and target as children of new parent
 		// NOTE: the old parent is now the grandparent of target and current
 		switch s.pathBit = s.target.Key.bitAt(s.bitPos); s.pathBit {
@@ -394,9 +398,14 @@ func (s *SMT) delete() lib.ErrorI {
 	// get the parent and grandparent
 	parent, grandparent := s.traversed.Parent(), s.traversed.GrandParent()
 	// get the sibling of the target
-	sibling, _ := parent.getOtherChild(targetBytes)
+	sibling, _, err := parent.getOtherChild(targetBytes)
+	if err != nil {
+		return err
+	}
 	// replace the parent reference with the sibling in the grandparent
-	grandparent.replaceChild(parent.Key.bytes(), sibling)
+	if err := grandparent.replaceChild(parent.Key.bytes(), sibling); err != nil {
+		return err
+	}
 	// delete the parent from the database and remove it from the traversal array
 	if err := s.delNode(parent.Key.bytes()); err != nil {
 		return err
@@ -478,16 +487,16 @@ func (s *SMT) addOperation(n *node) { s.unsortedOps[string(n.Key.bytes())] = n }
 
 // initializeTree() ensures the tree always has a root with two children
 // this allows the logic to be without root edge cases for insert and delete
-func (s *SMT) initializeTree(rootKey *key) {
+func (s *SMT) initializeTree(rootKey *key) lib.ErrorI {
 	// create a min and max node, this enables no edge cases for root
 	minNode := &node{Key: newNodeKey(bytes.Repeat([]byte{0}, 20), s.keyBitLength), Node: lib.Node{Value: bytes.Repeat([]byte{0}, 20)}}
 	maxNode := &node{Key: newNodeKey(bytes.Repeat([]byte{255}, 20), s.keyBitLength), Node: lib.Node{Value: bytes.Repeat([]byte{255}, 20)}}
 	// set min and max node in the database
 	if err := s.setNode(minNode); err != nil {
-		panic(err)
+		return err
 	}
 	if err := s.setNode(maxNode); err != nil {
-		panic(err)
+		return err
 	}
 	// update root
 	s.root = &node{
@@ -499,12 +508,13 @@ func (s *SMT) initializeTree(rootKey *key) {
 	}
 	// update the root's value
 	if err := s.updateParentValue(s.root); err != nil {
-		panic(err)
+		return err
 	}
 	// set the root in store
 	if err := s.setNode(s.root); err != nil {
-		panic(err)
+		return err
 	}
+	return nil
 }
 
 // updateParentValue() updates the value of parent based on its children
@@ -750,7 +760,10 @@ func (s *SMT) GetMerkleProof(k []byte) ([]*lib.Node, lib.ErrorI) {
 		node := s.traversed.Nodes[i]
 		parent := s.traversed.Nodes[i-1]
 		// use the parent and the current node itself in order to get its sibling
-		siblingKey, order := parent.getOtherChild(node.Key.bytes())
+		siblingKey, order, err := parent.getOtherChild(node.Key.bytes())
+		if err != nil {
+			return nil, err
+		}
 		siblingNode, err := s.getNode(siblingKey)
 		// check whether the sibling node actually exists
 		if err != nil {
@@ -794,7 +807,10 @@ func (s *SMT) VerifyProof(k []byte, v []byte, validateMembership bool, root []by
 	// Reconstruct a similar Merkle tree using the proof nodes. This allows to traverse
 	// the tree again to verify if the given key and value are included in the tree or
 	// to confirm proof-of-non-membership if the key is absent.
-	smt := NewSMT(RootKey, s.keyBitLength, memStore)
+	smt, err := NewSMT(RootKey, s.keyBitLength, memStore)
+	if err != nil {
+		return false, err
+	}
 	// set the node being proven in the new tree
 	if err := smt.setNode(&node{
 		Node: lib.Node{
@@ -1153,27 +1169,27 @@ func (x *node) setChildren(leftKey, rightKey []byte) {
 }
 
 // getOtherChild() returns the sibling for the child key passed and which child it is
-func (x *node) getOtherChild(childKey []byte) ([]byte, byte) {
+func (x *node) getOtherChild(childKey []byte) ([]byte, byte, lib.ErrorI) {
 	switch {
 	case bytes.Equal(x.LeftChildKey, childKey):
-		return x.RightChildKey, RightChild
+		return x.RightChildKey, RightChild, nil
 	case bytes.Equal(x.RightChildKey, childKey):
-		return x.LeftChildKey, LeftChild
+		return x.LeftChildKey, LeftChild, nil
 	}
-	panic("no child node was a match for getOtherChild")
+	return nil, 0, ErrChildNotFound(fmt.Sprintf("%x", childKey))
 }
 
 // replaceChild() replaces the child reference with a new key
-func (x *node) replaceChild(oldKey, newKey []byte) {
+func (x *node) replaceChild(oldKey, newKey []byte) lib.ErrorI {
 	switch {
 	case bytes.Equal(x.LeftChildKey, oldKey):
 		x.LeftChildKey = newKey
-		return
+		return nil
 	case bytes.Equal(x.RightChildKey, oldKey):
 		x.RightChildKey = newKey
-		return
+		return nil
 	}
-	panic("no child node was replaced")
+	return ErrChildNotReplaced(fmt.Sprintf("%x", oldKey))
 }
 
 // copy() returns a shallow copy of the node
