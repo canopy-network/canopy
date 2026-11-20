@@ -9,6 +9,15 @@ interface NodeLogsProps {
     onExportLogs: () => void;
 }
 
+// Escapes the HTML metacharacters a browser would otherwise interpret as markup.
+// Log lines carry remote-supplied text, so they are escaped before the highlight
+// patterns insert their own span tags.
+const escapeHtml = (str: string): string =>
+    str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
 export default function NodeLogs({
                                      logs,
                                      isPaused,
@@ -71,7 +80,7 @@ export default function NodeLogs({
             [/(Producing proposal as leader)/g, '<span style="color: #f59e0b; font-weight: 500">$1</span>']
         ];
 
-        let html = line;
+        let html = escapeHtml(line);
         for (const [pattern, replacement] of patterns) {
             html = html.replace(pattern, replacement as string);
         }
