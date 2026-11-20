@@ -958,3 +958,14 @@ func TestIterateAndAppend_NotCancelledCompletesNormally(t *testing.T) {
 	require.Nil(t, err)
 	require.Len(t, result, 2)
 }
+
+// TestCommitteeTier proves committeeTier's live-tip/historical split lands on the right height,
+// since LoadCommittee's metric and the committee cache's hit/miss labels both depend on it.
+func TestCommitteeTier(t *testing.T) {
+	sm := newTestStateMachine(t)
+	require.Equal(t, uint64(2), sm.height, "test fixture assumption - update the cases below if this changes")
+
+	require.Equal(t, "lss", sm.committeeTier(sm.height), "the current tip is lss")
+	require.Equal(t, "hss", sm.committeeTier(sm.height-1), "any historical height is hss")
+	require.Equal(t, "hss", sm.committeeTier(0), "genesis is hss")
+}

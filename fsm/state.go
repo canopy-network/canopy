@@ -445,12 +445,22 @@ func (s *StateMachine) TimeMachine(height uint64) (*StateMachine, lib.ErrorI) {
 	return historicalFSM, nil
 }
 
+// committeeTier() classifies height relative to the current tip: lss = live tip (cheap),
+// hss = everything else (full committee scan + BLS rebuild).
+func (s *StateMachine) committeeTier(height uint64) string {
+	if height == s.height {
+		return "lss"
+	}
+	return "hss"
+}
+
 // LoadCommittee() loads the committee validators for a particular committee at a particular height
 func (s *StateMachine) LoadCommittee(chainId uint64, height uint64) (lib.ValidatorSet, lib.ErrorI) {
 	startTime := time.Now()
+	tier := s.committeeTier(height)
 	observeStage := func(stage string, stageStartTime time.Time) {
 		if s.Metrics != nil {
-			s.Metrics.LoadCommitteeStageTime.WithLabelValues(stage).Observe(time.Since(stageStartTime).Seconds())
+			s.Metrics.LoadCommitteeStageTime.WithLabelValues(stage, tier).Observe(time.Since(stageStartTime).Seconds())
 		}
 	}
 	defer observeStage("total", startTime)
@@ -468,6 +478,28 @@ func (s *StateMachine) LoadCommittee(chainId uint64, height uint64) (lib.Validat
 	vs, err := historicalFSM.GetCommitteeMembers(chainId)
 	observeStage("get_committee_members", getCommitteeMembersStartTime)
 	return vs, err
+}
+
+// cachedLoadCommittee memoizes LoadCommittee's result, used only by blockNonSignerAddresses.
+// tier is the caller's already-computed classification - s.height here is pinned, not the live tip.
+func (s *StateMachine) cachedLoadCommittee(chainId, rootHeight uint64, tier string) (lib.ValidatorSet, lib.ErrorI) {
+	st, ok := s.store.(lib.StoreI)
+	if !ok {
+		return s.LoadCommittee(chainId, rootHeight)
+	}
+	vs, err := st.GetOrComputeCommittee(chainId, rootHeight, tier, func() (*lib.ValidatorSet, lib.ErrorI) {
+		committee, loadErr := s.LoadCommittee(chainId, rootHeight)
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		return &committee, nil
+	})
+	if err != nil {
+		return lib.ValidatorSet{}, err
+	}
+	// Copy(), not *vs - vs is the cached pointer; a plain dereference would still share
+	// ValidatorSet/MultiKey with every other caller and the cache itself.
+	return vs.Copy(), nil
 }
 
 // LoadCertificate() loads a quorum certificate (block, results + 2/3rd committee signatures)

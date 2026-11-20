@@ -9,6 +9,7 @@ import (
 
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/drand/kyber"
+	"google.golang.org/protobuf/proto"
 )
 
 // ValidatorSet represents a collection of validators responsible for consensus
@@ -19,6 +20,19 @@ type ValidatorSet struct {
 	TotalPower    uint64                 // the aggregate voting power of all validators in the set, reflecting their influence on the consensus
 	MinimumMaj23  uint64                 // the minimum voting power threshold required to achieve a two-thirds majority (2f+1), essential for consensus decisions
 	NumValidators uint64                 // the total number of validators in the set, indicating the size of the validator pool
+}
+
+// Copy() returns a deep copy safe to mutate - a plain struct copy would still share
+// ValidatorSet/MultiKey with the original (e.g. a cached entry in store.committeeCache).
+func (x ValidatorSet) Copy() ValidatorSet {
+	out := x
+	if x.ValidatorSet != nil {
+		out.ValidatorSet = proto.Clone(x.ValidatorSet).(*ConsensusValidators)
+	}
+	if x.MultiKey != nil {
+		out.MultiKey = x.MultiKey.Copy()
+	}
+	return out
 }
 
 // NewValidatorSet() initializes a ValidatorSet from a given set of consensus validators

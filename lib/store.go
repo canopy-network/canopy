@@ -46,6 +46,9 @@ type RWIndexerI interface {
 	// GetOrComputeValidatorTotals reads/computes totals for version (see
 	// store.Indexer.GetOrComputeValidatorTotals) - combines read+write, so it's here, not on RIndexerI/WIndexerI individually.
 	GetOrComputeValidatorTotals(version uint64, compute func() (*ValidatorTotals, ErrorI)) (*ValidatorTotals, ErrorI)
+	// GetOrComputeCommittee memoizes LoadCommittee's result - read-only callers only, never LoadCommittee itself.
+	// tier is a caller-supplied "lss"/"hss" classification, recorded on the cache hit/miss/dedup metrics.
+	GetOrComputeCommittee(chainId, rootHeight uint64, tier string, compute func() (*ValidatorSet, ErrorI)) (*ValidatorSet, ErrorI)
 }
 
 // WIndexerI defines the write interface for the indexing operations

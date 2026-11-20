@@ -102,6 +102,12 @@ type IndexerMetrics struct {
 	// for the same version -- concurrent requests racing the same missing cache entry.
 	ValidatorTotalsSingleflightDedup prometheus.Counter
 	ValidatorTotalsCacheSize         prometheus.Gauge
+	// CommitteeCacheHits/Misses cover GetOrComputeCommittee's memoization of LoadCommittee's
+	// result, labeled by tier so headscan (lss) and backfill (hss) traffic can be told apart.
+	CommitteeCacheHits         *prometheus.CounterVec
+	CommitteeCacheMisses       *prometheus.CounterVec
+	CommitteeSingleflightDedup *prometheus.CounterVec
+	CommitteeCacheSize         prometheus.Gauge
 }
 
 // NodeMetrics represents general telemetry for the node's health
@@ -533,8 +539,8 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 			}),
 			LoadCommitteeStageTime: promauto.NewHistogramVec(prometheus.HistogramOpts{
 				Name: "canopy_fsm_load_committee_stage_time",
-				Help: "Execution time of LoadCommittee stages",
-			}, []string{"stage"}),
+				Help: "Execution time of LoadCommittee stages, by tier (lss=live tip, hss=every other height) - an lss call in its own slow tail signals resource contention with concurrent hss traffic",
+			}, []string{"stage", "tier"}),
 			GetValidatorSetStageTime: promauto.NewHistogramVec(prometheus.HistogramOpts{
 				Name: "canopy_fsm_get_validator_set_stage_time",
 				Help: "Execution time of getValidatorSet stages",
@@ -819,6 +825,22 @@ func NewMetricsServer(nodeAddress crypto.AddressI, chainID float64, softwareVers
 			ValidatorTotalsCacheSize: promauto.NewGauge(prometheus.GaugeOpts{
 				Name: "canopy_validator_totals_cache_size",
 				Help: "Current number of entries in the validator-totals cache",
+			}),
+			CommitteeCacheHits: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_committee_cache_hits_total",
+				Help: "Total GetOrComputeCommittee calls served from the committee cache without calling LoadCommittee, by tier (lss=live tip, hss=every other height) -- lss is dominated by headscan traffic, hss by backfill, so this splits an aggregate hit rate that otherwise conflates the two",
+			}, []string{"tier"}),
+			CommitteeCacheMisses: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_committee_cache_misses_total",
+				Help: "Total GetOrComputeCommittee calls that required calling LoadCommittee in full, by tier (lss=live tip, hss=every other height) -- lss is dominated by headscan traffic, hss by backfill, so this splits an aggregate miss rate that otherwise conflates the two",
+			}, []string{"tier"}),
+			CommitteeSingleflightDedup: promauto.NewCounterVec(prometheus.CounterOpts{
+				Name: "canopy_committee_singleflight_dedup_total",
+				Help: "Total committee-cache-miss calls (including the leader) whose compute was shared with at least one other concurrent caller for the same (chainId, rootHeight), by tier (lss=live tip, hss=every other height) -- singleflight.Do's 'shared' bit doesn't separate leader from follower, so this counts contended resolutions, not followers alone.",
+			}, []string{"tier"}),
+			CommitteeCacheSize: promauto.NewGauge(prometheus.GaugeOpts{
+				Name: "canopy_committee_cache_size",
+				Help: "Current number of entries in the committee cache",
 			}),
 		},
 	}
@@ -1232,6 +1254,43 @@ func (m *Metrics) UpdateValidatorTotalsCacheSize(size int) {
 		return
 	}
 	m.ValidatorTotalsCacheSize.Set(float64(size))
+}
+
+// RecordCommitteeCacheHit() records a GetOrComputeCommittee call served without calling LoadCommittee, labeled by tier.
+func (m *Metrics) RecordCommitteeCacheHit(tier string) {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.CommitteeCacheHits.WithLabelValues(tier).Inc()
+}
+
+// RecordCommitteeCacheMiss() records a GetOrComputeCommittee call that required calling LoadCommittee, labeled by tier.
+func (m *Metrics) RecordCommitteeCacheMiss(tier string) {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.CommitteeCacheMisses.WithLabelValues(tier).Inc()
+}
+
+// RecordCommitteeSingleflightDedup() records a committee-cache-miss call whose compute was
+// shared with at least one other concurrent caller for the same (chainId, rootHeight), labeled by tier.
+func (m *Metrics) RecordCommitteeSingleflightDedup(tier string) {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.CommitteeSingleflightDedup.WithLabelValues(tier).Inc()
+}
+
+// UpdateCommitteeCacheSize() updates the current entry count of the committee cache.
+func (m *Metrics) UpdateCommitteeCacheSize(size int) {
+	// exit if empty
+	if m == nil {
+		return
+	}
+	m.CommitteeCacheSize.Set(float64(size))
 }
 
 // UpdateStoreRootTime() updates the time it took to compute an uncached store root.
