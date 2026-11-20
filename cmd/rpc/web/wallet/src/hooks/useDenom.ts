@@ -25,5 +25,5 @@ export function fromMicro(value: number, factor: number): number {
 }
 
 export function toMicro(value: number, factor: number): number {
-  return Math.floor(value * factor)
+  return Math.round(value * factor)
 }
