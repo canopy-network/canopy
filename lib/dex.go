@@ -57,6 +57,7 @@ func (x *DexLimitOrder) Copy() *DexLimitOrder {
 		AmountForSale:   x.AmountForSale,
 		RequestedAmount: x.RequestedAmount,
 		Address:         bytes.Clone(x.Address),
+		OrderId:         bytes.Clone(x.OrderId),
 	}
 }
 
