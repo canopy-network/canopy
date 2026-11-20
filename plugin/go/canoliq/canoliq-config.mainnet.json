@@ -1,0 +1,9 @@
+{
+  "_comment": "MAINNET plugin config. chainId 29 is canoLiq's registered committee id on Canopy mainnet — confirmed 2026-09-22 via the actual graduation record (Launchpad API chains/32 -> chain_id: 29), not a placeholder. This is NOT the node's own chain id, and must not be copied into CANOLIQCTL_CHAIN_ID. Set redemptionUnstakingBlocks to match Canopy's valParams.UnstakingBlocks (thousands of blocks; SafetyCheck refuses anything below 1000). profile=mainnet enables every startup guard. ACTIVATION: set activationHeight to the agreed future block before deploying this config; genesis runs in exactly that block on every node, and SafetyCheck refuses profile=mainnet with genesisPath set and activationHeight=0.",
+  "profile": "mainnet",
+  "chainId": 29,
+  "dataDirPath": "/tmp/plugin",
+  "genesisPath": "/app/plugin/go/canoliq/genesis.mainnet.json",
+  "rpcAddress": "0.0.0.0:8587",
+  "redemptionUnstakingBlocks": 30240
+}

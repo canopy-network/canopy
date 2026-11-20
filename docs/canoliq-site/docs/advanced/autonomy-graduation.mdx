@@ -1,0 +1,86 @@
+---
+sidebar_label: Autonomy Graduation
+---
+
+# Autonomy Graduation
+
+**In one sentence:** canoLiq continuously grades its own health against five thresholds, and
+once it durably clears all of them it becomes eligible to "graduate" from a Canopy nested
+chain into a sovereign chain.
+
+canoLiq launches as a **nested chain** secured by a Canopy committee. The long-term goal is
+for it to stand on its own. Rather than graduate on a hunch, the protocol measures five
+concrete signs of maturity every block and reports whether it is ready.
+
+## The five metrics
+
+A metric is **met** only when its current value is **strictly greater than** its threshold.
+All five must be met for the protocol to be `eligible`. Defaults shown (all
+governance-tunable):
+
+| Metric | What it measures | Default threshold |
+|--------|------------------|-------------------|
+| **TVL** | Total pooled CNPY (`total_pooled_cnpy`) | `50,000,000,000,000` uCNPY (~$50M at $1/CNPY) |
+| **Active validators** | Validators in the committee registry | 30 |
+| **Turnout** | Average governance participation across tallied proposals | 1,500 bps (15%) |
+| **Daily transactions** | Successful txs in the most recent completed day | 10,000 |
+| **Treasury runway** | Months the treasury can sustain its spending | 12 |
+
+:::note
+The TVL threshold is a flat uCNPY placeholder until a real price oracle exists; treat the
+"$50M" figure as illustrative.
+:::
+
+## How each metric is tracked
+
+- **TVL** and **active validators** are read directly from current state (the pool total and
+  the validator registry).
+- **Turnout** is a running average: every time a proposal is tallied, its participation
+  (`(yes + no + abstain) ÷ snapshot staked`, in bps) is added to a cumulative sum and the
+  sample count is incremented. The reported value is `turnout_sum_bps ÷ turnout_sample_count`.
+- **Daily transactions** uses a **rolling daily window**. Each successful `DeliverTx`
+  increments an in-progress counter; once a window spans a full day (`blocksPerDay = 14,400`
+  blocks at 6s), the counter is recorded as `last_daily_tx_count` and reset. The *completed*
+  window's count is what the metric reports, so it never shows a half-finished day.
+- **Treasury runway** estimates how long the treasury lasts at its current burn rate:
+
+  ```
+  monthly burn = cumulative treasury spend ÷ elapsed months
+  runway months = treasury CNPY ÷ monthly burn
+  ```
+
+  Special cases: a treasury with a positive balance but **no measured spending** reports an
+  effectively infinite runway (sentinel `1,000,000`); an **empty** treasury reports `0`.
+
+## Reading eligibility
+
+The `/v1/graduation` endpoint returns every metric with its current value, threshold, and
+whether it is met, plus the composite `eligible` flag:
+
+```json
+GET /v1/graduation
+{
+  "metrics": [
+    {"name": "tvl_ucnpy",        "value": 12000000000000, "threshold": 50000000000000, "met": false},
+    {"name": "active_validators","value": 18,             "threshold": 30,             "met": false},
+    {"name": "turnout_bps",      "value": 2100,           "threshold": 1500,           "met": true},
+    {"name": "daily_tx",         "value": 4200,           "threshold": 10000,          "met": false},
+    {"name": "runway_months",    "value": 1000000,        "threshold": 12,             "met": true}
+  ],
+  "eligible": false
+}
+```
+
+## What graduation does (and doesn't) do here
+
+This subsystem **measures and surfaces** eligibility — it does not flip the chain to
+sovereign on its own. Acting on eligibility is a separate governance step: the
+`ACTION_AUTONOMY_GRADUATE` [tier](../governance/governance-tiers.mdx) (the strictest one —
+15% quorum, 75% approval, 14-day timelock) gates the actual decision, and the dispatch of
+graduation itself is handled by a later milestone.
+
+## Related
+
+- [Governance Tiers](../governance/governance-tiers.mdx) — the `ACTION_AUTONOMY_GRADUATE` tier
+- [Treasury](./treasury.mdx) — what drives the runway metric
+- [API Endpoints](../api/endpoints.mdx) — `/v1/graduation`

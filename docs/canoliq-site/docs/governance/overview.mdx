@@ -1,0 +1,45 @@
+---
+sidebar_label: Overview
+---
+
+# Governance Overview
+
+CPLQ holders stake CPLQ for governance weight. All material protocol parameters flow through the same proposal pipeline.
+
+:::tip
+Different kinds of proposals must clear different bars. The quorum / approval / timelock /
+voting-period rules are chosen per action type — see [Governance Tiers](./governance-tiers.mdx).
+The parameters below are the **scalar fallback** used when no tier matches an action.
+:::
+
+## Key Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `voting_period_blocks` | 100,800 (~7d) | Blocks a proposal accepts votes |
+| `quorum_bps` | 3300 | Fraction of snapshot staked CPLQ required to participate (33%) |
+| `pass_threshold_bps` | 5001 | Yes / (yes + no) needed to pass (50%+1) |
+| `min_stake_to_propose` | 1,000,000 (1 CPLQ) | Minimum staked CPLQ a proposer must hold |
+| `treasury_threshold` | 1,000,000,000 uCNPY | Spend amount above which multisig + timelock kick in |
+| `multisig_signers` | set at genesis | Authorized multisig signer addresses |
+| `multisig_threshold` | 3 | Minimum approvals for above-threshold spends |
+| `timelock_blocks` | 28,800 (~48h) | Delay between proposal pass and execution |
+| `cplq_unstaking_blocks` | 100,800 (~7d) | Unbond window for CPLQ stake; must be ≥ voting period |
+
+:::caution Do not size a vote off the 33% figure
+A fee change needs 5% quorum, an emergency 8%, an upgrade 10%. Check
+[Governance Tiers](./governance-tiers.mdx) for the action you are actually proposing.
+:::
+
+## Voting Weight
+
+Voting weight is **snapshotted by stake-time**, not by proposal-time read, and is scaled by
+your [vote-escrow lock tier](../tokenomics/vote-escrow.mdx) (up to 4×):
+
+- A voter's weight = `CPLQStake.amount × tier multiplier` as of the proposal's `creation_height`
+- Votes are rejected if `staked_at_height > proposal.creation_height`
+- This defeats flash-stake attacks without storing per-(proposal, voter) snapshot balances
+
+:::note
+A staker who **increases** stake after a proposal opens will have a new `staked_at_height` and lose voting eligibility on that proposal. Re-staking cleanly resets eligibility.
+:::

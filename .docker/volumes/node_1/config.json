@@ -1,6 +1,8 @@
 {
   "logLevel": "debug",
   "chainId": 1,
+  "plugin": "go",
+  "pluginTimeoutMS": 1000,
   "sleepUntil": 0,
   "rootChain": [
     {

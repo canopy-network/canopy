@@ -1,0 +1,73 @@
+---
+sidebar_label: Overview
+---
+
+# Getting Started Overview
+
+canoLiq runs as a Go plugin for the Canopy Network. A single binary serves both the send tutorial contract and the canoLiq protocol, selected via the `CANOPY_PLUGIN_MODE` environment variable.
+
+## Prerequisites
+
+- **Go 1.26+** for building the plugin (see the repo's `go.mod`)
+- **Canopy Network** node running locally or in Docker
+- **Docker** (optional, for containerized localnet)
+
+## Architecture
+
+canoLiq is implemented as a sibling of `plugin/go/contract/`. It reuses the proto types from the `contract` package and runs its own FSM connection.
+
+### Key Components
+
+Orientation for contributors reading the plugin source; operators do not need this table.
+
+| File | Purpose |
+|------|---------|
+| `canoliq.go` | Main contract logic, CheckTx/DeliverTx handlers |
+| `plugin.go` | FSM socket communication and plugin lifecycle |
+| `state.go` | State key definitions and read/write helpers |
+| `deliver.go` | Transaction delivery routing |
+| `genesis.go` | Genesis initialization and CPLQ distribution |
+| `fee.go` | Protocol fee splitting (40/30/15/15) |
+| `reward.go` | Reward sweep and distribution |
+| `governance.go` | Proposal creation, voting, tallying |
+| `buyback.go` | Buyback execution (burn or distribute) |
+| `treasury.go` | Treasury spend with multisig + timelock |
+| `vesting.go` | Vesting schedule tracking and claim |
+| `stake.go` | CPLQ staking and unstaking |
+| `otclock.go` | OTC lock program: create, claim, cancel, and program funding |
+| `registry.go` | Validator registry, reconciled against committee membership |
+| `restaking.go` | Restaking allocation policy and drift reporting |
+| `graduation.go` | Autonomy-graduation metric tracking |
+| `alerts.go` | Push-alert evaluation and webhook dispatch |
+| `params.go` | Parameter validation and persistence |
+| `rpc.go` | Read-only HTTP query server (Phase 3) |
+| `query.go` | Query helpers for RPC endpoints |
+| `snapshot.go` | Block-cadence state snapshot backing the query API |
+| `lazy_query.go` | Per-address views resolved off the snapshot path |
+
+## Environment Variables
+
+:::caution Two different chain IDs
+A transaction is signed for the chain ID of the **node** it is submitted to — that is what
+`CANOLIQCTL_CHAIN_ID` sets, and it now defaults to `1`. The `chainId` in the *plugin* config is
+something else entirely: the canoLiq **committee ID** on Canopy, used to scope fee pools and
+committee membership. The two are meant to differ — testnet pairs node chain `1` with committee
+`42`, mainnet with committee `19`.
+
+Never copy the committee ID into `CANOLIQCTL_CHAIN_ID`. Signing for the wrong chain fails
+silently: `canoliqctl` prints a transaction hash and exits 0, the node admits the transaction to
+its mempool, then drops it, and nothing in the output says so. If a command reports success but
+state never changes, check this first.
+:::
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `CANOPY_PLUGIN_MODE` | Selects plugin mode: `contract` or `canoliq` | `contract` |
+| `CANOLIQ_CONFIG` | Path to JSON config file | — |
+| `CANOLIQCTL_RPC_URL` | Node query RPC URL | `http://localhost:50002` |
+| `CANOLIQCTL_ADMIN_URL` | Admin RPC URL (keystore) | `http://localhost:50003` |
+| `CANOLIQCTL_NETWORK_ID` | Canopy network ID | `1` |
+| `CANOLIQCTL_CHAIN_ID` | Chain ID of the node being submitted to (**not** the canoLiq committee ID) | `1` |
+| `CANOLIQCTL_NO_WAIT` | Skip outcome confirmation; print the tx hash and exit | `false` |
+| `CANOLIQCTL_PASSWORD` | Keystore password | — |
+| `CANOLIQ_RPC_ADDR` | Plugin RPC listen address (Phase 3) | — (disabled) |

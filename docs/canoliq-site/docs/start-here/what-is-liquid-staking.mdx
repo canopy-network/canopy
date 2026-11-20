@@ -1,0 +1,59 @@
+---
+sidebar_label: What Is Liquid Staking?
+sidebar_position: 2
+---
+
+# What Is Liquid Staking?
+
+:::tip In one sentence
+Staking normally locks your tokens; liquid staking gives you a tradable receipt token
+(cCNPY) that keeps earning rewards while you stay free to move, sell, or use it elsewhere.
+:::
+
+## The problem: staking locks your capital
+
+To help secure a proof-of-stake chain like Canopy, you **stake** tokens — you commit them
+so validators can put value at risk against misbehavior, and in return you earn a share of
+network rewards. The catch: staked tokens are **locked**. You cannot spend or trade them,
+and unstaking takes an unbonding waiting period. Your capital is working, but it is frozen.
+
+## The solution: a liquid receipt
+
+**Liquid staking** solves this. When you deposit CNPY into canoLiq, the protocol stakes it
+on your behalf and hands you a **receipt token, cCNPY**, that stands for your share of the
+pooled, staked CNPY. Now:
+
+- The underlying CNPY keeps **earning staking rewards**.
+- Your **cCNPY is liquid** — you hold, transfer, or use it while the stake stays productive.
+- When you want out, you **redeem** cCNPY for CNPY (after the unstaking window).
+
+## Why cCNPY grows in value instead of paying you tokens
+
+canoLiq does not drip reward tokens into your wallet. Instead, rewards flow back into the
+shared pool, so each cCNPY comes to represent **more** CNPY over time. This is the
+**exchange rate**:
+
+```
+exchange rate = total pooled CNPY ÷ total cCNPY supply   (rises as rewards arrive)
+```
+
+The first deposit mints cCNPY 1:1; after that you receive cCNPY at the current rate. Redeem
+later and the rate has risen — that difference is your yield. See
+[How It Works](../concepts/how-it-works.mdx) for the full walkthrough.
+
+## The second token: CPLQ
+
+cCNPY is about **yield**. canoLiq's second token, **CPLQ**, is about **governance** — a
+fixed supply of 100M tokens whose holders vote on protocol parameters and can lock their
+stake for extra voting weight. The two tokens do different jobs; see
+[The Two Tokens](../concepts/two-tokens.mdx).
+
+## Why canoLiq specifically
+
+- **No lock-up drag** — your staked value stays usable as cCNPY.
+- **Shared security** — it runs as a Canopy nested chain, borrowing Canopy's validators.
+- **Community-owned** — CPLQ governance tunes the economics, funds a treasury, and runs a
+  buyback; the protocol even tracks its own "[autonomy graduation](../advanced/autonomy-graduation.mdx)"
+  metrics.
+
+**Next:** [Reading Guide](./reading-guide.mdx) — where to go from here →
