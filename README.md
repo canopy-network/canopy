@@ -4,7 +4,7 @@ _Official golang implementation of the Canopy Network Protocol_
 
 [![GoDoc](https://img.shields.io/badge/godoc-reference-white.svg)](https://godoc.org/github.com/canopy-network/canopy)
 [![Getting Started](https://img.shields.io/badge/getting%20started-guide-white)](https://canopynetwork.org)
-[![Go Version](https://img.shields.io/badge/golang-v1.21-white.svg)](https://golang.org)
+[![Go Version](https://img.shields.io/badge/golang-v1.26-white.svg)](https://golang.org)
 [![Next.js Version](https://img.shields.io/badge/next%20js-v14.2.3-white.svg)](https://nextjs.org/)
 
 
@@ -78,7 +78,7 @@ make docker/up && make docker/logs
 ➪ To run Canopy unit tests, use the Go testing tools:
 
 ```bash
-make test
+make test/all
 ```
 
 ## How to Contribute
