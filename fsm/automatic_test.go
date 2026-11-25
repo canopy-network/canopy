@@ -91,7 +91,7 @@ func TestBeginBlock(t *testing.T) {
 				require.NoError(t, err)
 				// create a copy of the multikey
 				mk := committee.MultiKey.Copy()
-				// only sign with 3/4 to test the non-signer reduction
+				// only sign with 3/4 to exercise non-signer handling
 				for i := 0; i < 3; i++ {
 					privateKey := newTestKeyGroup(t, i).PrivateKey
 					// search for the proper index for the signer
@@ -205,6 +205,74 @@ func TestHandleCertificateResultsNilGuards(t *testing.T) {
 				err = sm.HandleCertificateResults(test.qc, nil)
 			})
 			require.Equal(t, test.expected, err)
+		})
+	}
+}
+
+// TestHandleCertificateResultsNonSignerRewardPolicy() verifies configurable reward handling for validators that did not sign.
+func TestHandleCertificateResultsNonSignerRewardPolicy(t *testing.T) {
+	const stakeAmount = uint64(100)
+	keyGroups := newTestKeyGroups(t, 4)
+	validators := make([]*Validator, 0, len(keyGroups))
+	consensusValidators := make([]*lib.ConsensusValidator, 0, len(keyGroups))
+	for _, keyGroup := range keyGroups {
+		validator := &Validator{
+			Address:      keyGroup.Address.Bytes(),
+			PublicKey:    keyGroup.PublicKey.Bytes(),
+			StakedAmount: stakeAmount,
+			Committees:   []uint64{lib.CanopyChainId},
+		}
+		validators = append(validators, validator)
+		consensusValidators = append(consensusValidators, &lib.ConsensusValidator{
+			PublicKey:   validator.PublicKey,
+			VotingPower: validator.StakedAmount,
+		})
+	}
+	committee, err := lib.NewValidatorSet(&lib.ConsensusValidators{ValidatorSet: consensusValidators})
+	require.NoError(t, err)
+
+	for _, test := range []struct {
+		name     string
+		preserve bool
+		expected uint64
+	}{
+		{name: "legacy reduction by default", expected: 75},
+		{name: "governance preserves rewards", preserve: true, expected: 100},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			sm := newTestStateMachine(t)
+			params, err := sm.GetParamsCons()
+			require.NoError(t, err)
+			params.PreserveNonSignerRewards = test.preserve
+			require.NoError(t, sm.SetParamsCons(params))
+			qc := newTestQC(t, testQCParams{
+				height:        1,
+				idxSigned:     map[int]bool{0: true, 1: true, 2: true, 3: false},
+				committeeKeys: keyGroups,
+				committee:     validators,
+				results: &lib.CertificateResult{
+					RewardRecipients: &lib.RewardRecipients{
+						PaymentPercents: []*lib.PaymentPercents{{
+							Address: newTestAddressBytes(t, 4),
+							ChainId: sm.Config.ChainId,
+							Percent: 100,
+						}},
+					},
+				},
+			})
+
+			require.NoError(t, sm.HandleCertificateResults(qc, &committee))
+			require.Equal(t, test.expected, qc.Results.RewardRecipients.PaymentPercents[0].Percent)
+
+			committeeData, err := sm.GetCommitteeData(lib.CanopyChainId)
+			require.NoError(t, err)
+			require.Len(t, committeeData.PaymentPercents, 1)
+			require.Equal(t, test.expected, committeeData.PaymentPercents[0].Percent)
+
+			nonSigners, err := sm.GetNonSigners()
+			require.NoError(t, err)
+			require.Len(t, nonSigners, 1)
+			require.Equal(t, uint64(1), nonSigners[0].Counter)
 		})
 	}
 }

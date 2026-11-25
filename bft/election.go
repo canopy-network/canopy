@@ -1,9 +1,15 @@
 package bft
 
 import (
+	"bytes"
+	"encoding/binary"
+	"fmt"
+	"math/big"
+	"math/bits"
+	"sort"
+
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
-	"math/big"
 )
 
 /*
@@ -109,6 +115,72 @@ func SelectProposerFromCandidates(candidates []VRFCandidate, data *lib.Sortition
 		}
 	}
 	return
+}
+
+// SelectProposerWeightedRoundRobin() maps a deterministic chain-and-view schedule into the validator set's canonical stake intervals.
+func SelectProposerWeightedRoundRobin(view *lib.View, validators *lib.ConsensusValidators, totalPower uint64) ([]byte, error) {
+	if view == nil {
+		return nil, fmt.Errorf("select deterministic proposer: nil view")
+	}
+	if validators == nil || len(validators.ValidatorSet) == 0 || totalPower == 0 {
+		return nil, fmt.Errorf("select deterministic proposer: empty validator set")
+	}
+	// Canonicalize validators so root-chain slice ordering cannot change the schedule or stake intervals.
+	canonicalSet := append([]*lib.ConsensusValidator(nil), validators.ValidatorSet...)
+	sort.Slice(canonicalSet, func(i, j int) bool {
+		if canonicalSet[i] == nil {
+			return canonicalSet[j] != nil
+		}
+		if canonicalSet[j] == nil {
+			return false
+		}
+		return bytes.Compare(canonicalSet[i].PublicKey, canonicalSet[j].PublicKey) < 0
+	})
+	var actualPower uint64
+	for _, validator := range canonicalSet {
+		if validator == nil {
+			return nil, fmt.Errorf("select deterministic proposer: nil validator")
+		}
+		if validator.VotingPower > ^uint64(0)-actualPower {
+			return nil, fmt.Errorf("select deterministic proposer: voting power overflow")
+		}
+		actualPower += validator.VotingPower
+	}
+	if actualPower != totalPower {
+		return nil, fmt.Errorf("select deterministic proposer: total power mismatch: expected %d, got %d", totalPower, actualPower)
+	}
+	powerIndex := weightedRoundRobinPowerIndex(view, totalPower)
+	var powerCount uint64
+	for _, validator := range canonicalSet {
+		powerCount += validator.VotingPower
+		if powerCount > powerIndex {
+			return validator.PublicKey, nil
+		}
+	}
+	return nil, fmt.Errorf("select deterministic proposer: no validator for power index %d", powerIndex)
+}
+
+// weightedRoundRobinPowerIndex() maps a consensus view into the validator set's total voting-power range.
+func weightedRoundRobinPowerIndex(view *lib.View, totalPower uint64) uint64 {
+	// Fixed Weyl increments keep adjacent tickets over one third of the uint64 space apart while chain identity rotates the schedule.
+	const (
+		heightStride uint64 = 0x9e3779b97f4a7c15 // golden-ratio Weyl increment
+		roundStride  uint64 = 0x6a09e667f3bcc909 // sqrt(2)-1 Weyl increment
+	)
+	seed := make([]byte, 0, len("canopy-weighted-round-robin")+2*8)
+	seed = append(seed, []byte("canopy-weighted-round-robin")...)
+	seed = binary.BigEndian.AppendUint64(seed, view.NetworkId)
+	seed = binary.BigEndian.AppendUint64(seed, view.ChainId)
+	scheduleHash := crypto.Hash(seed)
+	offset := binary.BigEndian.Uint64(scheduleHash[:8])
+	height := view.Height
+	if height != 0 {
+		height--
+	}
+	ticket := offset + height*heightStride + view.Round*roundStride
+	// Scaling instead of taking ticket modulo totalPower limits a one-unit power increase to a one-index movement.
+	powerIndex, _ := bits.Mul64(ticket, totalPower)
+	return powerIndex
 }
 
 // VRF() 'Practical Verifiable Random Function': a function that given a secret key and a message, generates a unique random-looking number

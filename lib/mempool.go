@@ -42,6 +42,8 @@ type FeeMempool struct {
 type MempoolTx struct {
 	Tx  []byte // transaction bytes
 	Fee uint64 // fee associated with the transaction
+
+	hash string // cached transaction hash used by the mempool index
 }
 
 // NewMempool() creates a new FeeMempool instance of a Mempool
@@ -98,7 +100,7 @@ func (f *FeeMempool) AddTransactions(txs ...[]byte) (recheck bool, err ErrorI) {
 			fee = math.MaxUint32
 		}
 		// add to the list
-		mempoolTxs = append(mempoolTxs, MempoolTx{Tx: tx, Fee: fee})
+		mempoolTxs = append(mempoolTxs, MempoolTx{Tx: tx, Fee: fee, hash: hash})
 		// update the number of bytes
 		txsBytes += txBytes
 	}
@@ -133,15 +135,15 @@ func (f *FeeMempool) GetTransactions(maxBytes uint64) (txs [][]byte) {
 	// for each transaction in the pool
 	for _, tx := range f.pool.s {
 		// get the size of the transaction in bytes
-		txSize := len(tx.Tx)
-		// add to the total bytes
-		totalBytes += uint64(txSize)
+		txSize := uint64(len(tx.Tx))
 		// check to see if the addition of this transaction
 		// exceeds the maxBytes limit
-		if totalBytes > maxBytes {
-			// exit without adding the tx
-			return
+		if txSize > maxBytes-totalBytes {
+			// Keep scanning so one oversized high-fee transaction cannot hide smaller valid entries.
+			continue
 		}
+		// add to the total bytes
+		totalBytes += txSize
 		// add the tx to the list and increment totalTxs
 		txs = append(txs, tx.Tx)
 	}
@@ -229,29 +231,37 @@ type MempoolTxs struct {
 
 // insert() batch inserts a number of txs into the list sorted by the highest fee to the lowest fee
 func (t *MempoolTxs) insert(txs ...MempoolTx) {
-	// combine existing and incoming txs
-	combined := append(t.s, txs...)
-	// sort by fee descending while preserving arrival order among equal-fee transactions
-	sort.SliceStable(combined, func(i, j int) bool {
-		return combined[i].Fee > combined[j].Fee
-	})
-	// prepare new map and slice
-	newMap := make(map[string]struct{}, len(combined))
-	newList := make([]MempoolTx, 0, len(combined))
-	// for each tx in the combined array
-	for _, tx := range combined {
-		hash := crypto.HashString(tx.Tx)
-		// skip duplicates
-		if _, exists := newMap[hash]; exists {
-			continue
-		}
-		// populate the newMap and newList
-		newList = append(newList, tx)
-		newMap[hash] = struct{}{}
+	if len(txs) == 0 {
+		return
 	}
-	// update
-	t.s = newList
-	t.m = newMap
+	if t.m == nil {
+		t.m = make(map[string]struct{}, len(txs))
+	}
+	// AddTransactions supplies a de-duplicated batch with cached hashes.
+	sort.SliceStable(txs, func(i, j int) bool { return txs[i].Fee > txs[j].Fee })
+	for _, tx := range txs {
+		t.m[tx.hash] = struct{}{}
+	}
+	// Append the common equal-fee batch without scanning the existing backlog.
+	if len(t.s) == 0 || t.s[len(t.s)-1].Fee >= txs[0].Fee {
+		t.s = append(t.s, txs...)
+		return
+	}
+	// Merge the fee-sorted lists with existing entries winning ties to preserve arrival order.
+	merged := make([]MempoolTx, 0, len(t.s)+len(txs))
+	i, j := 0, 0
+	for i < len(t.s) && j < len(txs) {
+		if t.s[i].Fee >= txs[j].Fee {
+			merged = append(merged, t.s[i])
+			i++
+		} else {
+			merged = append(merged, txs[j])
+			j++
+		}
+	}
+	merged = append(merged, t.s[i:]...)
+	merged = append(merged, txs[j:]...)
+	t.s = merged
 }
 
 // delete() batch deletes a number of transactions
@@ -269,8 +279,11 @@ func (t *MempoolTxs) delete(txs [][]byte) (deleted []MempoolTx, deletedBz int) {
 	newMap := make(map[string]struct{}, len(t.s))
 	// for each tx in the current slice
 	for _, tx := range t.s {
-		// create the hash
-		hash := crypto.HashString(tx.Tx)
+		hash := tx.hash
+		if hash == "" {
+			hash = crypto.HashString(tx.Tx)
+			tx.hash = hash
+		}
 		// if should delete
 		if _, found := toDelete[hash]; found {
 			// add to deleted list
@@ -303,10 +316,12 @@ func (t *MempoolTxs) drop(percent int) (dropped []MempoolTx) {
 	dropped = t.s[len(t.s)-numDrop:]
 	// update the list with what's not evicted
 	t.s = t.s[:len(t.s)-numDrop]
-	// rebuild map
-	t.m = make(map[string]struct{}, len(t.s))
-	for _, tx := range t.s {
-		t.m[crypto.HashString(tx.Tx)] = struct{}{}
+	// Remove only the evicted hashes; retained entries stay indexed.
+	for i := range dropped {
+		if dropped[i].hash == "" {
+			dropped[i].hash = crypto.HashString(dropped[i].Tx)
+		}
+		delete(t.m, dropped[i].hash)
 	}
 	// exit
 	return

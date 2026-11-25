@@ -78,6 +78,7 @@ type MultiConn struct {
 	lastPingRecv  atomic.Int64                        // last time we received a ping (unix nano)
 	lastPongSent  atomic.Int64                        // last time we queued a pong (unix nano)
 	peerInfo      *lib.PeerInfo                       // peer info cache
+	transportV2   bool                                // immutable wire format selected during handshake
 }
 
 // NewConnection() creates and starts a new instance of a MultiConn
@@ -103,6 +104,11 @@ func (p *P2P) NewConnection(conn net.Conn, info *lib.PeerInfo) (*MultiConn, lib.
 	if err != nil {
 		return nil, err
 	}
+	// Reject a handshake that straddles the hard cutover so the caller reconnects using the current mode.
+	if eConn.TransportV2() != transportV2ActiveAt(time.Now()) {
+		_ = eConn.Close()
+		return nil, ErrTransportCutover()
+	}
 	c := &MultiConn{
 		conn:          eConn,
 		uuid:          rand.Uint64(),
@@ -116,6 +122,7 @@ func (p *P2P) NewConnection(conn net.Conn, info *lib.PeerInfo) (*MultiConn, lib.
 		close:         sync.Once{},
 		log:           p.log,
 		peerInfo:      info,
+		transportV2:   eConn.TransportV2(),
 	}
 	now := time.Now().UnixNano()
 	c.lastPong.Store(now)
@@ -158,6 +165,10 @@ func (c *MultiConn) Stop() {
 func (c *MultiConn) Send(topic lib.Topic, bz []byte) (ok bool) {
 	defer lib.TimeTrack(c.log, time.Now(), time.Second)
 	startTime := time.Now()
+	if uint64(len(bz)) > uint64(maxMessageSize) {
+		c.log.Errorf("Message for stream %s exceeds max size: %d", topic, len(bz))
+		return false
+	}
 	stream, ok := c.streams[topic]
 	if !ok {
 		c.log.Errorf("Stream %s does not exist", topic)

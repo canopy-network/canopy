@@ -15,6 +15,12 @@ func TestValidConsensusSender(t *testing.T) {
 	require.True(t, validConsensusSender([]byte{1}, msg, false))
 	require.False(t, validConsensusSender([]byte{2}, msg, false))
 	require.True(t, validConsensusSender([]byte{2}, msg, true))
+	timeout := &bft.Message{
+		Qc:        &bft.QC{Header: &lib.View{Phase: bft.RoundInterrupt}},
+		Signature: &lib.Signature{PublicKey: []byte{1}},
+	}
+	require.False(t, validConsensusSender([]byte{2}, timeout, false))
+	require.True(t, validConsensusSender([]byte{2}, timeout, true))
 	require.False(t, validConsensusSender([]byte{1}, &bft.Message{}, true))
 }
 

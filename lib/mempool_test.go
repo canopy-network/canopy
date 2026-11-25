@@ -4,6 +4,7 @@ import (
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/stretchr/testify/require"
 	"math"
+	"strings"
 	"testing"
 	"time"
 )
@@ -297,6 +298,10 @@ func TestGetAndContainsTransaction(t *testing.T) {
 	// marshal to bytes
 	transactionD, err := Marshal(tx)
 	require.NoError(t, err)
+	tx = &Transaction{MessageType: testMessageName, Msg: a, Signature: sig, CreatedHeight: 1,
+		Time: uint64(time.Now().UnixMicro()), Fee: 2000, Memo: strings.Repeat("x", 100), NetworkId: 1, ChainId: 1}
+	transactionTooLarge, err := Marshal(tx)
+	require.NoError(t, err)
 	// define test cases
 	tests := []struct {
 		name          string
@@ -355,6 +360,25 @@ func TestGetAndContainsTransaction(t *testing.T) {
 				transactionA,
 			},
 			maxBytes: uint64(len(transactionA) + len(transactionB)),
+		},
+		{
+			name:   "skip a high fee transaction that does not fit",
+			detail: "a large transaction must not hide smaller transactions later in fee order",
+			txs: [][]byte{
+				transactionTooLarge,
+				transactionD,
+			},
+			mempool: &FeeMempool{
+				config: MempoolConfig{
+					MaxTotalBytes:       math.MaxUint64,
+					MaxTransactionCount: math.MaxUint32,
+					IndividualMaxTxSize: math.MaxUint32,
+					DropPercentage:      30,
+				},
+			},
+			expectedCount: 1,
+			expectedTxs:   [][]byte{transactionD},
+			maxBytes:      uint64(len(transactionD)),
 		},
 	}
 	for _, test := range tests {

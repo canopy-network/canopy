@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/alecthomas/units"
 )
@@ -214,7 +215,19 @@ type ConsensusConfig struct {
 	PrecommitVoteTimeoutMS  int `json:"precommitVoteTimeoutMS"`  // minus QC validation + vote time, is how long (in milliseconds) the replica sleeps before moving to COMMIT phase
 	CommitTimeoutMS         int `json:"commitTimeoutMS"`         // minus Precommit-QC aggregation time (if Leader), how long (in milliseconds) the replica sleeps before moving to the COMMIT-PROCESS phase
 	RoundInterruptTimeoutMS int `json:"roundInterruptTimeoutMS"` // minus gossiping current Round time, how long (in milliseconds) the replica sleeps before moving to PACEMAKER phase
+
+	ProposerMode              string `json:"proposerMode"`              // proposer-selection protocol: "vrf" (legacy) or "stakeWeightedRoundRobin" (fast)
+	RoundRobinBlockIntervalMS int    `json:"roundRobinBlockIntervalMS"` // round-zero pacing target used only by stakeWeightedRoundRobin
+	BlockConsensusLeadTimeMS  int    `json:"blockConsensusLeadTimeMS"`  // minimum proposal-to-timestamp budget used by stakeWeightedRoundRobin
+	MaximumFutureBlockTimeMS  int    `json:"maximumFutureBlockTimeMS"`  // maximum accepted future timestamp; coordinate across stakeWeightedRoundRobin validators
 }
+
+const (
+	defaultRoundRobinBlockIntervalMS = 500
+	defaultBlockConsensusLeadTimeMS  = 175
+	defaultMaximumFutureBlockTimeMS  = 1000
+	defaultRoundInterruptTimeoutMS   = 250
+)
 
 // DefaultConsensusConfig() configures the block time
 func DefaultConsensusConfig() ConsensusConfig {
@@ -227,7 +240,64 @@ func DefaultConsensusConfig() ConsensusConfig {
 		PrecommitTimeoutMS:     2000, // 2 seconds
 		PrecommitVoteTimeoutMS: 2000, // 2 seconds
 		CommitTimeoutMS:        2000, // 2 seconds
+
+		ProposerMode:              ProposerModeVRF,
+		RoundRobinBlockIntervalMS: defaultRoundRobinBlockIntervalMS,
+		BlockConsensusLeadTimeMS:  defaultBlockConsensusLeadTimeMS,
+		MaximumFutureBlockTimeMS:  defaultMaximumFutureBlockTimeMS,
 	}
+}
+
+const (
+	// ProposerModeVRF preserves the original election protocol as the default for configs without proposerMode.
+	ProposerModeVRF = "vrf"
+	// ProposerModeStakeWeightedRoundRobin enables the deterministic leader schedule and configurable optimistic pacemaker.
+	ProposerModeStakeWeightedRoundRobin = "stakeWeightedRoundRobin"
+)
+
+// UsesDeterministicProposers() reports whether this node uses the fast proposer protocol, which must match across validators.
+func (c *ConsensusConfig) UsesDeterministicProposers() bool {
+	return c != nil && c.ProposerMode == ProposerModeStakeWeightedRoundRobin
+}
+
+// RoundRobinBlockInterval() returns the coordinated round-zero pacing target, defaulting to 500 ms for old or zero-value configs.
+func (c *ConsensusConfig) RoundRobinBlockInterval() time.Duration {
+	if c == nil {
+		return durationMilliseconds(0, defaultRoundRobinBlockIntervalMS)
+	}
+	return durationMilliseconds(c.RoundRobinBlockIntervalMS, defaultRoundRobinBlockIntervalMS)
+}
+
+// BlockConsensusLeadTime returns the minimum proposal-to-timestamp budget used by stake-weighted round-robin.
+func (c *ConsensusConfig) BlockConsensusLeadTime() time.Duration {
+	if c == nil {
+		return durationMilliseconds(0, defaultBlockConsensusLeadTimeMS)
+	}
+	return durationMilliseconds(c.BlockConsensusLeadTimeMS, defaultBlockConsensusLeadTimeMS)
+}
+
+// MaximumFutureBlockTime returns the maximum accepted future timestamp used by stake-weighted round-robin.
+func (c *ConsensusConfig) MaximumFutureBlockTime() time.Duration {
+	if c == nil {
+		return durationMilliseconds(0, defaultMaximumFutureBlockTimeMS)
+	}
+	return durationMilliseconds(c.MaximumFutureBlockTimeMS, defaultMaximumFutureBlockTimeMS)
+}
+
+// RoundInterruptTimeout returns the deterministic pacemaker vote window.
+func (c *ConsensusConfig) RoundInterruptTimeout() time.Duration {
+	if c == nil {
+		return durationMilliseconds(0, defaultRoundInterruptTimeoutMS)
+	}
+	return durationMilliseconds(c.RoundInterruptTimeoutMS, defaultRoundInterruptTimeoutMS)
+}
+
+func durationMilliseconds(value, fallback int) time.Duration {
+	const maxMilliseconds = int64(math.MaxInt64) / int64(time.Millisecond)
+	if value <= 0 || int64(value) > maxMilliseconds {
+		value = fallback
+	}
+	return time.Duration(value) * time.Millisecond
 }
 
 // BlockTimeMS() returns the expected block time in milliseconds

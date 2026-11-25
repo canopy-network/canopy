@@ -53,6 +53,11 @@ func ErrMaxMessageSize() lib.ErrorI {
 	return lib.NewError(lib.CodeMaxMessageSize, lib.P2PModule, "max message size")
 }
 
+// ErrTransportCutover() reports a handshake that crossed the transport activation boundary.
+func ErrTransportCutover() lib.ErrorI {
+	return lib.NewError(lib.CodeFailedRead, lib.P2PModule, "transport V2 cutover")
+}
+
 func ErrIsBlacklisted() lib.ErrorI {
 	return lib.NewError(lib.CodeBlacklisted, lib.P2PModule, "blacklisted man-in-the-middle id")
 }

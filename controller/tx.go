@@ -181,8 +181,26 @@ type Mempool struct {
 	address         crypto.AddressI    // validator identity
 	cachedProposal  atomic.Value       // the cached block proposal set when mempool is 'checked'
 	dirtyVersion    atomic.Uint64      // a monotonic version tracking proposal inputs that invalidate the cache
+	proposalGate    sync.RWMutex       // gives a consensus-critical leader priority over new transaction admission
+	cancelL         sync.Mutex         // protects the active proposal-build cancellation function
 	stop            context.CancelFunc // the cancellable context of the mempool
 	log             lib.LoggerI        // the logger
+}
+
+// cancelProposalBuild() safely asks an in-flight speculative mempool build to yield CPU to consensus validation.
+func (m *Mempool) cancelProposalBuild() {
+	m.cancelL.Lock()
+	defer m.cancelL.Unlock()
+	if m.stop != nil {
+		m.stop()
+	}
+}
+
+// setProposalBuildCancel() publishes the cancellation function for the active speculative proposal build.
+func (m *Mempool) setProposalBuildCancel(stop context.CancelFunc) {
+	m.cancelL.Lock()
+	m.stop = stop
+	m.cancelL.Unlock()
 }
 
 type CachedProposal struct {
@@ -228,7 +246,8 @@ func (m *Mempool) HandleTransactionAndVerifyRetained(tx, replace []byte) lib.Err
 }
 
 func (m *Mempool) handleTransactions(verifyRetained bool, replace []byte, tx ...[]byte) (err lib.ErrorI) {
-	// lock the mempool
+	m.proposalGate.RLock()
+	defer m.proposalGate.RUnlock()
 	m.L.Lock()
 	defer m.L.Unlock()
 	// add a transaction to the mempool
@@ -255,25 +274,22 @@ func (m *Mempool) handleTransactions(verifyRetained bool, replace []byte, tx ...
 func (m *Mempool) CheckMempool() (err lib.ErrorI) {
 	startTime := time.Now()
 	m.log.Info("Validating mempool and caching a new proposal block")
-	buildVersion := m.dirtyVersion.Load()
-	// check if a validator
-	// create the actual block structure with the maximum amount of transactions allowed or available in the mempool
-	block := &lib.Block{
-		BlockHeader:  &lib.BlockHeader{Time: uint64(time.Now().UnixMicro()), ProposerAddress: m.address.Bytes()},
-		Transactions: m.GetTransactions(math.MaxUint64), // get all transactions in mempool - but apply block will only keep 'max-block' amount
+	maxBlockSize, err := m.FSM.GetMaxBlockSize()
+	if err != nil {
+		return err
 	}
-	// capture the tentative block result using a new object reference
-	blockResult, result := new(lib.BlockResult), new(lib.ApplyBlockResults)
 	// setup a context with cancel
 	ctx, stop := context.WithCancel(context.Background())
 	// set the cancel function
-	m.stop = stop
+	m.setProposalBuildCancel(stop)
+	defer stop()
 	// calculate rc build height
 	ownRoot, err := m.FSM.LoadIsOwnRoot()
 	if err != nil {
 		m.log.Error(err.Error())
 	}
 	rcBuildHeight := uint64(0)
+	var rootDexBatch *lib.DexBatch
 	// if ownRoot
 	if ownRoot {
 		rcBuildHeight = m.FSM.Height()
@@ -287,7 +303,6 @@ func (m *Mempool) CheckMempool() (err lib.ErrorI) {
 			rcBuildHeight = m.controller.RCManager.GetHeight(rootChainID)
 		}
 		// for nested chains fetch and cache the DEX root batch, liveness is handled on the certificate results
-		var rootDexBatch *lib.DexBatch
 		rootDexBatch, err = m.controller.RCManager.GetDexBatch(rootChainID,
 			rcBuildHeight, m.controller.Config.ChainId, false)
 		if err != nil {
@@ -302,21 +317,51 @@ func (m *Mempool) CheckMempool() (err lib.ErrorI) {
 			m.log.Warnf("Check Mempool skipped: unable to fetch root dex batch: %s", err.Error())
 			return
 		}
-		m.FSM.SetRootDexCache(rootDexBatch)
 	}
-	// apply the block to the mempool FSM to get the result and validate the transactions
-	applyBlockStartTime := time.Now()
-	block.BlockHeader, result, err = m.FSM.ApplyBlock(ctx, block, true)
-	applyBlockDuration := time.Since(applyBlockStartTime)
-	if m.metrics != nil {
-		m.metrics.ProposalApplyBlockTime.Observe(applyBlockDuration.Seconds())
-	}
-	if err != nil {
-		m.log.Warnf("Check Mempool error: %s", err.Error())
-		if m.dirtyVersion.Load() == buildVersion {
-			m.dirtyVersion.Add(1)
+	var (
+		block              *lib.Block
+		blockResult        *lib.BlockResult
+		result             *lib.ApplyBlockResults
+		buildVersion       uint64
+		applyBlockDuration time.Duration
+	)
+	for {
+		buildVersion = m.dirtyVersion.Load()
+		block = &lib.Block{
+			BlockHeader:  &lib.BlockHeader{Time: uint64(time.Now().UnixMicro()), ProposerAddress: m.address.Bytes()},
+			Transactions: m.GetTransactions(maxBlockSize),
 		}
-		return err
+		if rootDexBatch != nil {
+			m.FSM.SetRootDexCache(rootDexBatch)
+		}
+		// Apply one block-sized prefix, evict failures, reset speculative state, and refill before caching.
+		applyBlockStartTime := time.Now()
+		block.BlockHeader, result, err = m.FSM.ApplyBlock(ctx, block, true)
+		applyDuration := time.Since(applyBlockStartTime)
+		applyBlockDuration += applyDuration
+		if m.metrics != nil {
+			m.metrics.ProposalApplyBlockTime.Observe(applyDuration.Seconds())
+		}
+		if err != nil {
+			m.log.Warnf("Check Mempool error: %s", err.Error())
+			if m.dirtyVersion.Load() == buildVersion {
+				m.dirtyVersion.Add(1)
+			}
+			return err
+		}
+		if len(result.Failed) == 0 {
+			break
+		}
+		failedTxBz := make([][]byte, 0, len(result.Failed))
+		for _, failed := range result.Failed {
+			m.cachedFailedTxs.Add(failed)
+			failedTxBz = append(failedTxBz, failed.GetBytes())
+			m.log.Warnf("%s", failed.Error)
+		}
+		m.DeleteTransaction(failedTxBz...)
+		m.dirtyVersion.Add(1)
+		m.log.Warnf("Removed failed %d txs from mempool; refilling proposal", len(result.Failed))
+		m.FSM.Reset()
 	}
 	// set the block result block header
 	blockResult = &lib.BlockResult{BlockHeader: block.BlockHeader, Transactions: result.Results, Events: result.Events}
@@ -335,24 +380,6 @@ func (m *Mempool) CheckMempool() (err lib.ErrorI) {
 		dirtyVersion:       buildVersion,
 		proposalVoteConfig: m.FSM.ProposalVoteConfig(),
 	})
-	// create a cache of failed tx bytes to evict from the mempool
-	var failedTxBz [][]byte
-	// mark as failed in the cache
-	for _, tx := range result.Failed {
-		// cache failed txs for RPC display
-		m.cachedFailedTxs.Add(tx)
-		// save the bytes
-		failedTxBz = append(failedTxBz, tx.GetBytes())
-	}
-	// evict all invalid transactions from the mempool
-	m.DeleteTransaction(failedTxBz...)
-	// log a warning
-	if len(result.Failed) != 0 {
-		m.log.Warnf("Removed failed %d txs from mempool", len(result.Failed))
-		for _, f := range result.Failed {
-			m.log.Warnf("%s", f.Error)
-		}
-	}
 	// reset the RPC cached results
 	m.cachedResults = nil
 	// add results to cache

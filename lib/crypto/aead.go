@@ -8,9 +8,10 @@ import (
 	"io"
 )
 
+// MaxDataSize is the largest plaintext in one variable-length authenticated transport record.
 const (
 	LengthHeaderSize   = 4
-	MaxDataSize        = 1024
+	MaxDataSize        = 64 * 1024
 	ChallengeSize      = 32
 	Poly1305TagSize    = 16
 	FrameSize          = MaxDataSize + LengthHeaderSize
@@ -19,6 +20,13 @@ const (
 	AEADNonceSize      = chacha20poly1305.NonceSize
 	TwoAEADKeySize     = 2 * AEADKeySize
 	HKDFSize           = TwoAEADKeySize + ChallengeSize // 2 keys and challenge
+)
+
+const (
+	// LegacyMaxDataSize is the fixed plaintext payload used by transport V1.
+	LegacyMaxDataSize        = 1024
+	LegacyFrameSize          = LegacyMaxDataSize + LengthHeaderSize
+	LegacyEncryptedFrameSize = Poly1305TagSize + LegacyFrameSize
 )
 
 // Big picture: DH is used to establish a shared secret, and then HKDF is used to derive multiple keys from that secret for encryption

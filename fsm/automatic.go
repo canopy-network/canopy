@@ -155,6 +155,11 @@ func (s *StateMachine) HandleCertificateResults(qc *lib.QuorumCertificate, commi
 	if qc.Results.RewardRecipients == nil {
 		return lib.ErrNilRewardRecipients()
 	}
+	for _, payment := range qc.Results.RewardRecipients.PaymentPercents {
+		if payment == nil {
+			return lib.ErrInvalidPercentAllocation()
+		}
+	}
 	// ensure the committee isn't retired
 	retired, err := s.CommitteeIsRetired(qc.Header.ChainId)
 	if err != nil {
@@ -204,15 +209,19 @@ func (s *StateMachine) HandleCertificateResults(qc *lib.QuorumCertificate, commi
 		return err
 	}
 	observeStage("byzantine", byzantineStartTime)
-	// reduce all payment percents proportional to the non-signer percent
-	reducePercentsStartTime := time.Now()
-	for i, p := range results.RewardRecipients.PaymentPercents {
-		if p == nil {
-			return lib.ErrInvalidPercentAllocation()
-		}
-		results.RewardRecipients.PaymentPercents[i].Percent = lib.Uint64ReducePercentage(p.Percent, uint64(nonSignerPercent))
+	// get consensus params
+	consensusParams, err := s.GetParamsCons()
+	if err != nil {
+		return err
 	}
-	observeStage("reduce_payment_percents", reducePercentsStartTime)
+	// if not reduce all payment percents proportional to the non-signer percent
+	if !consensusParams.PreserveNonSignerRewards {
+		reducePercentsStartTime := time.Now()
+		for _, payment := range results.RewardRecipients.PaymentPercents {
+			payment.Percent = lib.Uint64ReducePercentage(payment.Percent, uint64(nonSignerPercent))
+		}
+		observeStage("reduce_payment_percents", reducePercentsStartTime)
+	}
 	// if the quorum is signalling 'retire' for a 'nestedChain'
 	if qc.Results.Retired && qc.Header.ChainId != s.Config.ChainId {
 		// retire the committeeId on this root
