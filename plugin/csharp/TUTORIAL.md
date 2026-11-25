@@ -37,13 +37,13 @@ message MessageReward {
 
 // MessageFaucet is a test-only transaction that mints tokens to any address
 // No balance check required - just mints tokens for testing purposes
+// NOTE: there is intentionally NO `amount` field. The minted amount is operator-controlled via
+// config.json `pluginConfig.faucetAmount` (see Step 6b), not supplied per-transaction over RPC.
 message MessageFaucet {
   // signer_address: the address signing this transaction (for auth)
   bytes signer_address = 1; // @gotags: json:"signerAddress"
   // recipient_address: who receives the tokens
   bytes recipient_address = 2; // @gotags: json:"recipientAddress"
-  // amount: tokens to mint
-  uint64 amount = 3;
 }
 ```
 
@@ -155,12 +155,8 @@ private PluginCheckResponse CheckMessageFaucet(MessageFaucet msg)
         return new PluginCheckResponse { Error = ErrInvalidAddress() };
     }
 
-    // Validate amount - must be greater than zero.
-    // Zero-amount transactions are meaningless and waste block space.
-    if (msg.Amount == 0)
-    {
-        return new PluginCheckResponse { Error = ErrInvalidAmount() };
-    }
+    // NOTE: there is no amount to validate here - the faucet mints a fixed, operator-controlled
+    // amount (pluginConfig.faucetAmount), which is validated once at startup (see Step 6b).
 
     // Build and return the successful check response:
     // - Recipient: who receives funds (used for indexing/notifications)
@@ -323,7 +319,9 @@ private async Task<PluginDeliverResponse> DeliverMessageFaucetAsync(MessageFauce
     // CORE LOGIC: Add the faucet amount to the recipient's balance.
     // This is where tokens are "minted" - we simply increase the balance.
     // No balance check needed because faucet creates tokens from nothing.
-    recipient.Amount += msg.Amount;
+    // The amount is NOT taken from the message; it comes from the operator-controlled
+    // pluginConfig.faucetAmount, decoded + validated once at startup (see Step 6b).
+    recipient.Amount += Plugin.Settings!.FaucetAmount;
 
     // Build the write request to persist state changes.
     // Sets contains key-value pairs to write; Deletes would remove keys.
@@ -520,14 +518,62 @@ public async Task StartRpcServerAsync()
 }
 ```
 
-Each handler calls the detached, read-only `QueryStateAsync`:
+Each handler calls a detached, read-only query path:
 
-- Without `?address`, it does a **range read** over the record prefix (`FaucetPrefix()` / `RewardPrefix()`) and returns every record.
-- With `?address=<hex>`, it does a **single-key read** (`KeyForFaucet(addr)` / `KeyForReward(addr)`) and returns just that recipient's record.
+- Without `?address`, it does a **range read** over the record prefix (`FaucetPrefix()` / `RewardPrefix()`) via `QueryStateAsync` and returns every record.
+- With `?address=<hex>`, it does a **single-key read** (`KeyForFaucet(addr)` / `KeyForReward(addr)`) via `QueryStateWithProofAsync` and returns just that recipient's record **together with a sparse-merkle-tree proof** (see "Return a verifiable proof" below).
 
 > **Important — the range prefix must be length-prefixed.** Stored keys are length-prefixed (`KeyForFaucet(addr)` = `JoinLenPrefix(FaucetPrefixBytes, addr)`), so the prefix you pass to a **range read** must be length-prefixed too — that's exactly what `FaucetPrefix()` returns (`JoinLenPrefix(FaucetPrefixBytes)`, i.e. `[0x01, 0x64]`), **not** the raw byte `[0x64]`. Passing the raw prefix byte misaligns Canopy's length-prefixed iterator and crashes the node with `panic: corrupt or incomplete key`. (Single-key reads via `KeyForFaucet(addr)` are already length-prefixed, so they're unaffected.)
 
 Because the skeleton already starts the server from `Program.cs`, no change to `Program.cs` is needed — your new routes are served as soon as you rebuild.
+
+### Return a verifiable proof (recommended)
+
+A read endpoint that just echoes a value asks the caller to **trust the node**: a malicious or buggy node could return any number it likes. The detached query path can do better. When a single-key read sets `Prove = true`, the FSM returns, alongside the value, a **sparse-merkle-tree (SMT) proof** and the **state root** (plus the concrete committed `height` the query resolved at). This lets a client verify the result **trustlessly**:
+
+1. The client authenticates the `stateRoot` **independently** — it fetches the block/quorum certificate for `height` from consensus (not from this endpoint) and confirms the validator set signed off on that exact root.
+2. The client then verifies the returned `proof` against that trusted root. A membership proof (`exists == true`) proves the `key` maps to exactly `value`; a non-membership proof (`exists == false`) proves the key is absent.
+
+The key property: **a lying node can only make verification fail, never forge a value.** It cannot produce a valid proof for a value the state root doesn't actually commit to.
+
+The framework exposes this via `Plugin.QueryStateWithProofAsync(height, key)`, which returns a small `StateProof { byte[] Value; bool Exists; IReadOnlyList<ProofNode> Proof; byte[] StateRoot; ulong Height }`. Back the **by-address** (single-record) faucet handler with it and shape the JSON to carry everything a client needs to verify:
+
+```csharp
+// GET /v1/query/faucets?address=<hex>[&height=<uint64>]  (single record, with proof)
+private async Task HandleQueryFaucetByAddressAsync(HttpListenerContext context, byte[] addr, ulong height)
+{
+    // single-key read WITH a proof over the committed snapshot (height 0 = latest)
+    var key = Contract.KeyForFaucet(addr);
+    var sp = await QueryStateWithProofAsync(height, key);
+
+    // `faucet` is a convenience, decoded view of `value` — it is NOT part of what the proof commits to.
+    // Clients that care about trustlessness verify `proof` against `stateRoot`, then decode `value` themselves.
+    Faucet? faucet = null;
+    if (sp.Exists && sp.Value.Length > 0)
+    {
+        faucet = new Faucet();
+        faucet.MergeFrom(sp.Value);
+    }
+
+    WriteJson(context, new
+    {
+        height = sp.Height,
+        stateRoot = BytesToHex(sp.StateRoot),
+        key = BytesToHex(key),
+        exists = sp.Exists,
+        value = BytesToHex(sp.Value),
+        proof = sp.Proof.Select(n => new
+        {
+            key = BytesToHex(n.Key.ToByteArray()),
+            value = BytesToHex(n.Value.ToByteArray()),
+            bitmask = n.Bitmask
+        }),
+        faucet, // convenience view only (decoded from `value`); not covered by the proof
+    });
+}
+```
+
+The **by-address reward** handler follows the exact same pattern — read `Contract.KeyForReward(addr)` with `QueryStateWithProofAsync`, decode `value` into a `Reward`, and return the same `{height, stateRoot, key, exists, value, proof, reward}` shape. The range/list endpoints (no `?address`) stay on `QueryStateAsync`; proofs are a single-key feature.
 
 ### Query the endpoints
 
@@ -538,8 +584,20 @@ After faucet/reward transactions have been included in blocks:
 curl 'http://localhost:50010/v1/query/faucets'
 # {"faucets":[{"recipientAddress":"...","totalAmount":1000000000,"count":1}],"count":1,"height":0}
 
-# a single recipient's faucet record
+# a single recipient's faucet record, WITH a verifiable SMT proof (see "Return a verifiable proof")
 curl 'http://localhost:50010/v1/query/faucets?address=<recipient-hex>'
+# {
+#   "height": 128,
+#   "stateRoot": "9f3c...a1",                       // authenticate this independently via the quorum certificate
+#   "key": "0164...<recipient>",                    // the length-prefixed state key that was proven
+#   "exists": true,
+#   "value": "0a14...<faucet-protobuf-bytes>",      // raw bytes the proof commits to
+#   "proof": [                                      // leaf + sibling nodes; verify against stateRoot
+#     {"key": "...", "value": "...", "bitmask": 0},
+#     {"key": "...", "value": "...", "bitmask": 1}
+#   ],
+#   "faucet": {"recipientAddress":"...","totalAmount":1000000000,"count":1} // convenience view only (decoded from value)
+# }
 
 # all reward records (optionally at a historical height)
 curl 'http://localhost:50010/v1/query/rewards?height=42'
@@ -556,6 +614,96 @@ Build the plugin:
 cd plugin/csharp
 make build
 ```
+
+## Step 6b: Configure the faucet amount via `pluginConfig`
+
+The faucet amount is **operator-controlled**, not supplied per-transaction. It is read from the
+node's `config.json` `pluginConfig` field, which Canopy forwards verbatim to the plugin during the
+handshake. `pluginConfig` is intentionally typed as *any* JSON on the node side, so each plugin can
+define its own schema and validate it at startup.
+
+### How it flows
+
+1. **Node config** (`~/.canopy/config.json`) carries an opaque `pluginConfig` JSON value:
+
+   ```json
+   {
+     "plugin": "csharp",
+     "pluginConfig": { "faucetAmount": 1000000000 }
+   }
+   ```
+
+2. **Canopy core** (`lib/config.go` `MainConfig.PluginConfig`) reads it as raw JSON and forwards it
+   to the plugin in the handshake response (`PluginFSMConfig.plugin_config`). Core never inspects it.
+
+3. **The plugin** decodes + validates it at startup. The base SDK (`src/CanopyPlugin/config.cs`)
+   defines the expected shape and the single validation entry point, and `src/CanopyPlugin/plugin.cs`
+   stores the result on the running plugin:
+
+   ```csharp
+   // Config gains an opaque pluginConfig field (any JSON) in src/CanopyPlugin/config.cs
+   public class Config
+   {
+       public int ChainId { get; set; } = 1;
+       public string DataDirPath { get; set; } = "/tmp/plugin/";
+       public string RpcAddress { get; set; } = "0.0.0.0:50010";
+       public JsonElement? PluginConfig { get; set; }
+   }
+
+   // PluginSettings is the typed, validated shape the plugin expects
+   public class PluginSettings
+   {
+       public ulong FaucetAmount { get; set; }
+
+       // ParsePluginConfig decodes + validates the forwarded JSON at startup; a malformed blob throws
+       // so the plugin fails fast, satisfying "validate it is in the expected form".
+       public static PluginSettings ParsePluginConfig(byte[] raw) { /* ... */ }
+   }
+   ```
+
+   `HandshakeAsync` (in `src/CanopyPlugin/plugin.cs`) calls
+   `PluginSettings.ParsePluginConfig(response.Config.PluginConfig.ToByteArray())` and stores the result
+   on `Settings`, so handlers can read `Plugin.Settings!.FaucetAmount`. An invalid blob is fatal: the
+   plugin logs and calls `Environment.Exit(1)`.
+
+### Require a non-zero faucet amount (tutorial validation)
+
+Because this plugin's faucet is useless without a configured amount, extend `ParsePluginConfig` to
+reject a missing/zero `faucetAmount` so the plugin fails fast at startup:
+
+```csharp
+public static PluginSettings ParsePluginConfig(byte[] raw)
+{
+    if (raw == null || raw.Length == 0)
+    {
+        throw new InvalidOperationException(
+            "missing pluginConfig (expected { \"faucetAmount\": <uint64> })");
+    }
+
+    PluginSettings? settings;
+    try
+    {
+        settings = JsonSerializer.Deserialize<PluginSettings>(raw, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        });
+    }
+    catch (JsonException ex)
+    {
+        throw new InvalidOperationException($"invalid pluginConfig: {ex.Message}", ex);
+    }
+
+    if (settings == null || settings.FaucetAmount == 0)
+    {
+        throw new InvalidOperationException("faucetAmount must be greater than zero");
+    }
+
+    return settings;
+}
+```
+
+The tutorial test (`tutorial/RpcTest.cs`) asserts the faucet mints exactly this configured amount
+(`FaucetConfiguredAmount`), proving the amount comes from `pluginConfig` and not from the RPC request.
 
 ## Step 7: Running Canopy with the Plugin
 
@@ -576,16 +724,20 @@ canopy start
 
 #### 2. Enable the C# plugin
 
-Edit `~/.canopy/config.json` and add or modify the `plugin` field to `"csharp"`:
+Edit `~/.canopy/config.json` and add or modify the `plugin` field to `"csharp"`, and add the opaque
+`pluginConfig` the plugin expects (`faucetAmount`):
 
 ```json
 {
   "plugin": "csharp",
+  "pluginConfig": { "faucetAmount": 1000000000 },
   ...
 }
 ```
 
 **Note**: The `plugin` field should be at the top level of the JSON configuration.
+
+**Note**: `pluginConfig` is an opaque (any) JSON value that Canopy forwards to the plugin unchanged. For this tutorial the C# plugin expects `{ "faucetAmount": <uint64> }` and validates it at startup (see Step 6b); with the stricter tutorial validation the plugin refuses to start if it is missing or `faucetAmount` is zero.
 
 #### 3. Start Canopy
 

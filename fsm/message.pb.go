@@ -1297,6 +1297,99 @@ func (x *MessageDexLiquidityWithdraw) GetOrderId() []byte {
 	return nil
 }
 
+// MessageChangeByzantineOutput is a governance proposal used to redirect the returned stake of an unstaking
+// Validator. This is intentionally a separate message from MessageEditStake so governance cannot alter any other
+// Validator fields and the normal output-address authorization remains unchanged.
+type MessageChangeByzantineOutput struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// validator_address: identifies the unstaking Validator whose output address will be changed
+	ValidatorAddress []byte `protobuf:"bytes,1,opt,name=validator_address,json=validatorAddress,proto3" json:"validatorAddress"` // @gotags: json:"validatorAddress"
+	// output_address: is the new address that will receive the Validator's returned stake
+	OutputAddress []byte `protobuf:"bytes,2,opt,name=output_address,json=outputAddress,proto3" json:"outputAddress"` // @gotags: json:"outputAddress"
+	// signer: is the address of the sender / creator of the proposal
+	Signer []byte `protobuf:"bytes,3,opt,name=signer,proto3" json:"signer,omitempty"`
+	// start_height: is the first height at which the proposal may execute
+	StartHeight uint64 `protobuf:"varint,4,opt,name=start_height,json=startHeight,proto3" json:"startHeight"` // @gotags: json:"startHeight"
+	// end_height: is the last height at which the proposal may execute
+	EndHeight uint64 `protobuf:"varint,5,opt,name=end_height,json=endHeight,proto3" json:"endHeight"` // @gotags: json:"endHeight"
+	// proposal_hash: internal use only, tracks the hash of the proposal to check against the proposals.json file
+	ProposalHash  string `protobuf:"bytes,6,opt,name=proposal_hash,json=proposalHash,proto3" json:"proposalHash"` // @gotags: json:"proposalHash"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MessageChangeByzantineOutput) Reset() {
+	*x = MessageChangeByzantineOutput{}
+	mi := &file_message_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageChangeByzantineOutput) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageChangeByzantineOutput) ProtoMessage() {}
+
+func (x *MessageChangeByzantineOutput) ProtoReflect() protoreflect.Message {
+	mi := &file_message_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageChangeByzantineOutput.ProtoReflect.Descriptor instead.
+func (*MessageChangeByzantineOutput) Descriptor() ([]byte, []int) {
+	return file_message_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *MessageChangeByzantineOutput) GetValidatorAddress() []byte {
+	if x != nil {
+		return x.ValidatorAddress
+	}
+	return nil
+}
+
+func (x *MessageChangeByzantineOutput) GetOutputAddress() []byte {
+	if x != nil {
+		return x.OutputAddress
+	}
+	return nil
+}
+
+func (x *MessageChangeByzantineOutput) GetSigner() []byte {
+	if x != nil {
+		return x.Signer
+	}
+	return nil
+}
+
+func (x *MessageChangeByzantineOutput) GetStartHeight() uint64 {
+	if x != nil {
+		return x.StartHeight
+	}
+	return 0
+}
+
+func (x *MessageChangeByzantineOutput) GetEndHeight() uint64 {
+	if x != nil {
+		return x.EndHeight
+	}
+	return 0
+}
+
+func (x *MessageChangeByzantineOutput) GetProposalHash() string {
+	if x != nil {
+		return x.ProposalHash
+	}
+	return ""
+}
+
 var File_message_proto protoreflect.FileDescriptor
 
 const file_message_proto_rawDesc = "" +
@@ -1397,7 +1490,15 @@ const file_message_proto_rawDesc = "" +
 	"\bchain_id\x18\x01 \x01(\x04R\achainId\x12\x18\n" +
 	"\apercent\x18\x02 \x01(\x04R\apercent\x12\x18\n" +
 	"\aaddress\x18\x03 \x01(\fR\aaddress\x12\x18\n" +
-	"\aOrderId\x18\x04 \x01(\fR\aOrderIdB&Z$github.com/canopy-network/canopy/fsmb\x06proto3"
+	"\aOrderId\x18\x04 \x01(\fR\aOrderId\"\xf1\x01\n" +
+	"\x1cMessageChangeByzantineOutput\x12+\n" +
+	"\x11validator_address\x18\x01 \x01(\fR\x10validatorAddress\x12%\n" +
+	"\x0eoutput_address\x18\x02 \x01(\fR\routputAddress\x12\x16\n" +
+	"\x06signer\x18\x03 \x01(\fR\x06signer\x12!\n" +
+	"\fstart_height\x18\x04 \x01(\x04R\vstartHeight\x12\x1d\n" +
+	"\n" +
+	"end_height\x18\x05 \x01(\x04R\tendHeight\x12#\n" +
+	"\rproposal_hash\x18\x06 \x01(\tR\fproposalHashB&Z$github.com/canopy-network/canopy/fsmb\x06proto3"
 
 var (
 	file_message_proto_rawDescOnce sync.Once
@@ -1411,30 +1512,31 @@ func file_message_proto_rawDescGZIP() []byte {
 	return file_message_proto_rawDescData
 }
 
-var file_message_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_message_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_message_proto_goTypes = []any{
-	(*MessageSend)(nil),                 // 0: types.MessageSend
-	(*MessageStake)(nil),                // 1: types.MessageStake
-	(*MessageEditStake)(nil),            // 2: types.MessageEditStake
-	(*MessageUnstake)(nil),              // 3: types.MessageUnstake
-	(*MessagePause)(nil),                // 4: types.MessagePause
-	(*MessageUnpause)(nil),              // 5: types.MessageUnpause
-	(*MessageChangeParameter)(nil),      // 6: types.MessageChangeParameter
-	(*MessageDAOTransfer)(nil),          // 7: types.MessageDAOTransfer
-	(*MessageCertificateResults)(nil),   // 8: types.MessageCertificateResults
-	(*MessageSubsidy)(nil),              // 9: types.MessageSubsidy
-	(*MessageCreateOrder)(nil),          // 10: types.MessageCreateOrder
-	(*MessageEditOrder)(nil),            // 11: types.MessageEditOrder
-	(*MessageDeleteOrder)(nil),          // 12: types.MessageDeleteOrder
-	(*MessageDexLimitOrder)(nil),        // 13: types.MessageDexLimitOrder
-	(*MessageDexLiquidityDeposit)(nil),  // 14: types.MessageDexLiquidityDeposit
-	(*MessageDexLiquidityWithdraw)(nil), // 15: types.MessageDexLiquidityWithdraw
-	(*anypb.Any)(nil),                   // 16: google.protobuf.Any
-	(*lib.QuorumCertificate)(nil),       // 17: types.QuorumCertificate
+	(*MessageSend)(nil),                  // 0: types.MessageSend
+	(*MessageStake)(nil),                 // 1: types.MessageStake
+	(*MessageEditStake)(nil),             // 2: types.MessageEditStake
+	(*MessageUnstake)(nil),               // 3: types.MessageUnstake
+	(*MessagePause)(nil),                 // 4: types.MessagePause
+	(*MessageUnpause)(nil),               // 5: types.MessageUnpause
+	(*MessageChangeParameter)(nil),       // 6: types.MessageChangeParameter
+	(*MessageDAOTransfer)(nil),           // 7: types.MessageDAOTransfer
+	(*MessageCertificateResults)(nil),    // 8: types.MessageCertificateResults
+	(*MessageSubsidy)(nil),               // 9: types.MessageSubsidy
+	(*MessageCreateOrder)(nil),           // 10: types.MessageCreateOrder
+	(*MessageEditOrder)(nil),             // 11: types.MessageEditOrder
+	(*MessageDeleteOrder)(nil),           // 12: types.MessageDeleteOrder
+	(*MessageDexLimitOrder)(nil),         // 13: types.MessageDexLimitOrder
+	(*MessageDexLiquidityDeposit)(nil),   // 14: types.MessageDexLiquidityDeposit
+	(*MessageDexLiquidityWithdraw)(nil),  // 15: types.MessageDexLiquidityWithdraw
+	(*MessageChangeByzantineOutput)(nil), // 16: types.MessageChangeByzantineOutput
+	(*anypb.Any)(nil),                    // 17: google.protobuf.Any
+	(*lib.QuorumCertificate)(nil),        // 18: types.QuorumCertificate
 }
 var file_message_proto_depIdxs = []int32{
-	16, // 0: types.MessageChangeParameter.parameter_value:type_name -> google.protobuf.Any
-	17, // 1: types.MessageCertificateResults.qc:type_name -> types.QuorumCertificate
+	17, // 0: types.MessageChangeParameter.parameter_value:type_name -> google.protobuf.Any
+	18, // 1: types.MessageCertificateResults.qc:type_name -> types.QuorumCertificate
 	2,  // [2:2] is the sub-list for method output_type
 	2,  // [2:2] is the sub-list for method input_type
 	2,  // [2:2] is the sub-list for extension type_name
@@ -1453,7 +1555,7 @@ func file_message_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_message_proto_rawDesc), len(file_message_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   16,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

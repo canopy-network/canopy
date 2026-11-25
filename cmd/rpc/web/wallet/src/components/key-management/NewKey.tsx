@@ -19,6 +19,14 @@ export const NewKey = ({ embedded = false, onSuccess }: { embedded?: boolean; on
         walletName: ''
     });
 
+    const invalidateAccounts = () =>
+        queryClient.invalidateQueries({
+            predicate: (query) =>
+                Array.isArray(query.queryKey) &&
+                query.queryKey[0] === 'ds' &&
+                query.queryKey[2] === 'keystoreNicknames',
+        });
+
     const panelVariants = {
         hidden: { opacity: 0, y: 20 },
         visible: {
@@ -29,11 +37,6 @@ export const NewKey = ({ embedded = false, onSuccess }: { embedded?: boolean; on
     };
 
     const handleCreateWallet = async () => {
-        if (!newKeyForm.walletName) {
-            toast.error({ title: 'Missing wallet name', description: 'Please enter a wallet name.' });
-            return;
-        }
-
         if (!newKeyForm.password) {
             toast.error({ title: 'Missing password', description: 'Please enter a password.' });
             return;
@@ -56,12 +59,14 @@ export const NewKey = ({ embedded = false, onSuccess }: { embedded?: boolean; on
                 password: newKeyForm.password
             });
 
-            await queryClient.invalidateQueries({ queryKey: ['ds', 'keystore'] });
+            await invalidateAccounts();
 
             toast.dismiss(loadingToast);
             toast.success({
                 title: 'Wallet created',
-                description: `Wallet "${newKeyForm.walletName}" is ready.`,
+                description: newKeyForm.walletName
+                    ? `Wallet "${newKeyForm.walletName}" is ready.`
+                    : 'Your new wallet is ready.',
             });
 
             setNewKeyForm({ password: '', confirmPassword: '', walletName: '' });
@@ -70,7 +75,7 @@ export const NewKey = ({ embedded = false, onSuccess }: { embedded?: boolean; on
             const newAddress = typeof response === 'string' ? response : (response as any)?.address;
             if (newAddress) {
                 setTimeout(() => {
-                    queryClient.invalidateQueries({ queryKey: ['ds', 'keystore'] });
+                    void invalidateAccounts();
                 }, 500);
             }
         } catch (error) {
@@ -95,7 +100,7 @@ export const NewKey = ({ embedded = false, onSuccess }: { embedded?: boolean; on
                 <div className="space-y-5">
                     <div>
                         <label className="mb-2 block text-sm font-medium text-foreground/80">
-                            Wallet Name
+                            Wallet Name <span className="text-muted-foreground font-normal">(optional)</span>
                         </label>
                         <input
                             type="text"

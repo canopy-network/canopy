@@ -33,6 +33,12 @@ namespace CanopyPlugin.Tutorial
         private const ulong ChainId = 1;
         private const string TestPassword = "testpassword123";
 
+        // FaucetConfiguredAmount is the fixed amount (uCNPY) the plugin mints per faucet transaction. The
+        // faucet amount is NO LONGER supplied over RPC; it is operator-controlled via config.json
+        // `pluginConfig.faucetAmount` (forwarded to the plugin at handshake - see TUTORIAL.md). Keep this
+        // constant in sync with the `faucetAmount` configured in the node's config.json for these tests.
+        private const ulong FaucetConfiguredAmount = 1000000000; // 1000 tokens
+
         private static readonly HttpClient HttpClient = new()
         {
             Timeout = TimeSpan.FromSeconds(30)
@@ -73,18 +79,17 @@ namespace CanopyPlugin.Tutorial
             // Get account 1's key for signing
             var account1Key = await KeystoreGetKeyAsync(AdminRpcUrl, account1Addr, TestPassword);
 
-            // Step 2: Use faucet to add balance to account 1
+            // Step 2: Use faucet to add balance to account 1. The faucet amount is NOT passed here; it is
+            // taken from the plugin's pluginConfig.faucetAmount, so we assert the minted amount matches it.
             Console.WriteLine("\nStep 2: Using faucet to add balance to account 1...");
 
-            const ulong faucetAmount = 1000000000;  // 1000 tokens
             const ulong faucetFee = 10000;
-            Console.WriteLine($"  Amount: {faucetAmount}, Fee: {faucetFee}");
+            Console.WriteLine($"  Amount (from pluginConfig): {FaucetConfiguredAmount}, Fee: {faucetFee}");
 
             var faucetTxHash = await SendFaucetTxAsync(
                 QueryRpcUrl,
                 account1Key,
                 account1Addr,
-                faucetAmount,
                 faucetFee,
                 NetworkId,
                 ChainId,
@@ -106,6 +111,11 @@ namespace CanopyPlugin.Tutorial
             var bal1AfterFaucet = await GetAccountBalanceAsync(QueryRpcUrl, account1Addr);
             var bal2AfterFaucet = await GetAccountBalanceAsync(QueryRpcUrl, account2Addr);
             Console.WriteLine($"  Balances after faucet - Account 1: {bal1AfterFaucet}, Account 2: {bal2AfterFaucet}");
+
+            // Validate the faucet minted exactly pluginConfig.faucetAmount (account 1 started empty),
+            // proving the amount came from the plugin's config and not from the RPC request.
+            Assert.Equal(FaucetConfiguredAmount, bal1AfterFaucet);
+            Console.WriteLine($"  Faucet minted the configured pluginConfig.faucetAmount ({FaucetConfiguredAmount}) as expected");
 
             // Step 3: Send tokens from account 1 to account 2
             Console.WriteLine("\nStep 3: Sending tokens from account 1 to account 2...");
@@ -248,14 +258,13 @@ namespace CanopyPlugin.Tutorial
 
             const ulong fee = 10000;
 
-            // Step 2: Faucet the recipient twice and verify the aggregated faucet record
-            const ulong faucetAmount1 = 700000000;
-            const ulong faucetAmount2 = 300000000;
-
-            Console.WriteLine($"\nStep 2: Sending first faucet to recipient (amount={faucetAmount1}, fee={fee})...");
+            // Step 2: Faucet the recipient twice and verify the aggregated faucet record. Each faucet mints
+            // the fixed pluginConfig.faucetAmount (not an RPC-supplied amount), so the record should
+            // aggregate in multiples of that configured amount.
+            Console.WriteLine($"\nStep 2: Sending first faucet to recipient (amount from pluginConfig={FaucetConfiguredAmount}, fee={fee})...");
             var height = await GetHeightAsync(QueryRpcUrl);
             Console.WriteLine($"  Current height: {height}");
-            var txHash = await SendFaucetTxAsync(QueryRpcUrl, recipientKey, recipientAddr, faucetAmount1, fee, NetworkId, ChainId, height);
+            var txHash = await SendFaucetTxAsync(QueryRpcUrl, recipientKey, recipientAddr, fee, NetworkId, ChainId, height);
             Console.WriteLine($"  First faucet transaction sent: {txHash}");
 
             Console.WriteLine("  Waiting for first faucet transaction to be confirmed...");
@@ -263,20 +272,27 @@ namespace CanopyPlugin.Tutorial
             Assert.True(included, "First faucet tx not included within timeout");
             Console.WriteLine("  First faucet transaction confirmed!");
 
-            // after the first faucet, the record should exist with count=1 and totalAmount=faucetAmount1
+            // after the first faucet, the record should exist with count=1 and totalAmount=FaucetConfiguredAmount
             Console.WriteLine($"  Querying plugin endpoint GET /v1/query/faucets?address={recipientAddr} ...");
             var faucet = await PollFaucetRecordAsync(pluginRpcUrl, recipientAddr, recordTimeout);
             Assert.NotNull(faucet);
             Console.WriteLine($"  Faucet record after first faucet: recipient={faucet!.RecipientAddress} totalAmount={faucet.TotalAmount} count={faucet.Count}");
             Assert.Equal(1UL, faucet.Count);
-            Assert.Equal(faucetAmount1, faucet.TotalAmount);
+            Assert.Equal(FaucetConfiguredAmount, faucet.TotalAmount);
             Assert.Equal(recipientAddr.ToLowerInvariant(), faucet.RecipientAddress.ToLowerInvariant());
             Console.WriteLine("  Faucet record verified after first faucet (count=1)");
 
-            Console.WriteLine($"\n  Sending second faucet to recipient (amount={faucetAmount2}, fee={fee})...");
+            // The by-address endpoint also returns a verifiable SMT proof: assert the response carries a
+            // non-empty stateRoot, a concrete height > 0, exists == true, and a non-empty proof so a client
+            // could authenticate the root independently and verify the record trustlessly.
+            Console.WriteLine($"  Verifying by-address faucet response includes a verifiable proof ...");
+            await AssertFaucetProofAsync(pluginRpcUrl, recipientAddr);
+            Console.WriteLine("  By-address faucet proof verified (stateRoot, height>0, exists=true, non-empty proof)");
+
+            Console.WriteLine($"\n  Sending second faucet to recipient (amount from pluginConfig={FaucetConfiguredAmount}, fee={fee})...");
             height = await GetHeightAsync(QueryRpcUrl);
             Console.WriteLine($"  Current height: {height}");
-            txHash = await SendFaucetTxAsync(QueryRpcUrl, recipientKey, recipientAddr, faucetAmount2, fee, NetworkId, ChainId, height);
+            txHash = await SendFaucetTxAsync(QueryRpcUrl, recipientKey, recipientAddr, fee, NetworkId, ChainId, height);
             Console.WriteLine($"  Second faucet transaction sent: {txHash}");
 
             Console.WriteLine("  Waiting for second faucet transaction to be confirmed...");
@@ -284,8 +300,8 @@ namespace CanopyPlugin.Tutorial
             Assert.True(included, "Second faucet tx not included within timeout");
             Console.WriteLine("  Second faucet transaction confirmed!");
 
-            // after the second faucet, count should be 2 and totalAmount the sum of both
-            const ulong wantTotal = faucetAmount1 + faucetAmount2;
+            // after the second faucet, count should be 2 and totalAmount twice the configured faucet amount
+            const ulong wantTotal = 2 * FaucetConfiguredAmount;
             Console.WriteLine("  Waiting for faucet record to reflect the second faucet (count=2)...");
             faucet = await PollFaucetRecordUntilAsync(pluginRpcUrl, recipientAddr, 2, recordTimeout);
             Assert.NotNull(faucet);
@@ -309,7 +325,7 @@ namespace CanopyPlugin.Tutorial
             Console.WriteLine("\nStep 3: Funding admin via faucet so it can pay the reward fee...");
             height = await GetHeightAsync(QueryRpcUrl);
             Console.WriteLine($"  Current height: {height}");
-            txHash = await SendFaucetTxAsync(QueryRpcUrl, adminKey, adminAddr, 100000000, fee, NetworkId, ChainId, height);
+            txHash = await SendFaucetTxAsync(QueryRpcUrl, adminKey, adminAddr, fee, NetworkId, ChainId, height);
             Console.WriteLine($"  Admin faucet transaction sent: {txHash}");
 
             Console.WriteLine("  Waiting for admin faucet transaction to be confirmed...");
@@ -381,6 +397,93 @@ namespace CanopyPlugin.Tutorial
             Console.WriteLine($"  curl '{pluginRpcUrl}/v1/query/rewards?address={recipientAddr}'");
             Console.WriteLine($"  curl '{pluginRpcUrl}/v1/query/faucets'");
             Console.WriteLine($"  curl '{pluginRpcUrl}/v1/query/rewards'");
+        }
+
+        /// <summary>
+        /// Proves the merkle proof actually does its job. It funds a fresh recipient so a real membership
+        /// proof exists, fetches the honest proof from the plugin RPC endpoint and confirms it VERIFIES
+        /// against the returned state root, then tampers each input (the value, a proof node, the root, and
+        /// the key) and asserts verification now FAILS. A client that trusts the node blindly could be lied
+        /// to; a client that verifies the proof cannot.
+        ///
+        /// NOTE: like the other tutorial tests this is a live integration test. It skips when the plugin
+        /// RPC server isn't reachable. It verifies against the root the node returned; a production client
+        /// authenticates that root independently via the quorum certificate before trusting it.
+        ///
+        /// Run with: dotnet test --filter "FaucetProofTamperDetected" --logger "console;verbosity=detailed"
+        /// </summary>
+        [Fact]
+        public async Task FaucetProofTamperDetected()
+        {
+            const string pluginRpcUrl = "http://localhost:50010"; // the plugin's own custom RPC server
+            var txTimeout = TimeSpan.FromSeconds(120);
+            var recordTimeout = TimeSpan.FromSeconds(60);
+
+            Console.WriteLine("=== C# Faucet Proof Tamper-Detection Test ===\n");
+
+            // Skip gracefully if the plugin RPC server isn't reachable (consistent with the other tutorial tests)
+            Console.WriteLine($"Checking plugin RPC server reachability at {pluginRpcUrl} ...");
+            if (await GetRawJsonOrNullAsync($"{pluginRpcUrl}/v1/query/faucets") == null)
+            {
+                Console.WriteLine($"SKIP: plugin RPC server not reachable at {pluginRpcUrl} (is Canopy running with the csharp plugin and port 50010 exposed?)");
+                return;
+            }
+            Console.WriteLine("Plugin RPC server is reachable");
+
+            // Fund a fresh recipient so a membership proof exists for its faucet record
+            Console.WriteLine("Funding a fresh recipient so a membership proof exists...");
+            var suffix = RandomSuffix();
+            var recipientAddr = await KeystoreNewKeyAsync(AdminRpcUrl, $"test_proof_{suffix}", TestPassword);
+            var recipientKey = await KeystoreGetKeyAsync(AdminRpcUrl, recipientAddr, TestPassword);
+            Console.WriteLine($"  Created recipient account: {recipientAddr}");
+
+            var height = await GetHeightAsync(QueryRpcUrl);
+            var txHash = await SendFaucetTxAsync(QueryRpcUrl, recipientKey, recipientAddr, 10000, NetworkId, ChainId, height);
+            Console.WriteLine($"  Faucet transaction sent: {txHash}");
+
+            var included = await WaitForTxInclusionAsync(QueryRpcUrl, recipientAddr, txHash, txTimeout);
+            Assert.True(included, "faucet tx not included within timeout");
+            Console.WriteLine("  Faucet transaction confirmed!");
+
+            var funded = await PollFaucetRecordAsync(pluginRpcUrl, recipientAddr, recordTimeout);
+            Assert.NotNull(funded);
+            Console.WriteLine("  Faucet record is visible on the plugin RPC endpoint");
+
+            // Fetch the honest proof envelope
+            var env = await QueryFaucetWithProofAsync(pluginRpcUrl, recipientAddr);
+            Assert.True(env.Exists, "expected a membership proof (exists=true) for a funded recipient");
+            Assert.True(env.Proof.Count > 0, "expected a non-empty proof");
+
+            var key = env.Key;
+            var value = env.Value;
+            var root = env.StateRoot;
+            var proof = env.Proof;
+
+            // Positive control: the honest proof MUST verify against the returned state root
+            Assert.True(Verifier.VerifyKeyProof(key, value, true, root, proof),
+                "honest faucet proof failed to verify against the state root");
+            Console.WriteLine($"  Honest faucet proof verified ({proof.Count} node(s)) against the state root");
+
+            // Negative cases: each tampered input MUST be rejected (returns false)
+            Assert.False(Verifier.VerifyKeyProof(key, FlipFirstByte(value), true, root, proof),
+                "verification ACCEPTED a tampered value (expected failure)");
+            Console.WriteLine("  Tampered value correctly rejected");
+
+            var tamperedProof = CloneProof(proof);
+            tamperedProof[0].Value = FlipFirstByte(tamperedProof[0].Value);
+            Assert.False(Verifier.VerifyKeyProof(key, value, true, root, tamperedProof),
+                "verification ACCEPTED a tampered proof node (expected failure)");
+            Console.WriteLine("  Tampered proof node correctly rejected");
+
+            Assert.False(Verifier.VerifyKeyProof(key, value, true, FlipFirstByte(root), proof),
+                "verification ACCEPTED a tampered state root (expected failure)");
+            Console.WriteLine("  Tampered state root correctly rejected");
+
+            Assert.False(Verifier.VerifyKeyProof(FlipFirstByte(key), value, true, root, proof),
+                "verification ACCEPTED a proof for the wrong key (expected failure)");
+            Console.WriteLine("  Wrong key correctly rejected");
+
+            Console.WriteLine("\n--- All tampered faucet proofs were correctly rejected by the verifier ---");
         }
 
         #region Helper Methods
@@ -544,23 +647,23 @@ namespace CanopyPlugin.Tutorial
         }
 
         /// <summary>
-        /// Send a faucet transaction.
+        /// Send a faucet transaction. Note there is no amount parameter: the minted amount comes from the
+        /// plugin's pluginConfig.faucetAmount, not from the caller/RPC.
         /// </summary>
         private static async Task<string> SendFaucetTxAsync(
             string rpcUrl,
             KeyGroup signerKey,
             string recipientAddr,
-            ulong amount,
             ulong fee,
             ulong networkId,
             ulong chainId,
             ulong height)
         {
+            // Create the faucet message (no amount - it is set by pluginConfig.faucetAmount)
             var faucetMsg = new Dictionary<string, object>
             {
                 ["signerAddress"] = signerKey.Address,
-                ["recipientAddress"] = recipientAddr,
-                ["amount"] = amount
+                ["recipientAddress"] = recipientAddr
             };
 
             return await BuildSignAndSendTxAsync(rpcUrl, signerKey, "faucet", faucetMsg, fee, networkId, chainId, height);
@@ -656,8 +759,7 @@ namespace CanopyPlugin.Tutorial
                 "faucet" => new MessageFaucet
                 {
                     SignerAddress = ByteString.CopyFrom(BLSCrypto.HexToBytes((string)msgJson["signerAddress"])),
-                    RecipientAddress = ByteString.CopyFrom(BLSCrypto.HexToBytes((string)msgJson["recipientAddress"])),
-                    Amount = (ulong)msgJson["amount"]
+                    RecipientAddress = ByteString.CopyFrom(BLSCrypto.HexToBytes((string)msgJson["recipientAddress"]))
                 }.ToByteArray(),
                 _ => throw new ArgumentException($"Unknown message type: {msgType}")
             };
@@ -776,6 +878,91 @@ namespace CanopyPlugin.Tutorial
             var respBody = await GetRawJsonAsync($"{pluginUrl}/v1/query/faucets?address={address}");
             var faucetNode = JsonNode.Parse(respBody)?["faucet"];
             return faucetNode == null ? null : ParseFaucet(faucetNode);
+        }
+
+        /// <summary>
+        /// Fetch the by-address faucet record and assert it carries a verifiable SMT proof: a non-empty
+        /// stateRoot, a concrete height &gt; 0, exists == true, and a non-empty proof. Throws on failure.
+        /// </summary>
+        private static async Task AssertFaucetProofAsync(string pluginUrl, string address)
+        {
+            var respBody = await GetRawJsonAsync($"{pluginUrl}/v1/query/faucets?address={address}");
+            var root = JsonNode.Parse(respBody)!;
+
+            var stateRoot = root["stateRoot"]?.GetValue<string>() ?? "";
+            Assert.False(string.IsNullOrEmpty(stateRoot), "by-address faucet response missing a non-empty stateRoot");
+
+            var height = root["height"]?.GetValue<ulong>() ?? 0UL;
+            Assert.True(height > 0, "by-address faucet response should report height > 0");
+
+            var exists = root["exists"]?.GetValue<bool>() ?? false;
+            Assert.True(exists, "by-address faucet response should report exists == true for a fauceted address");
+
+            Assert.True(root["proof"] is JsonArray proof && proof.Count > 0,
+                "by-address faucet response should include a non-empty proof");
+        }
+
+        /// <summary>
+        /// Mirrors the proof-carrying JSON shape of /v1/query/faucets?address=&lt;hex&gt;: the merkle proof,
+        /// committed value, state root, and height needed to verify the answer trustlessly against an
+        /// independently authenticated root. All byte fields are decoded from hex.
+        /// </summary>
+        private record FaucetProofEnvelope(ulong Height, byte[] StateRoot, byte[] Key, bool Exists, byte[] Value, List<ProofNode> Proof);
+
+        /// <summary>
+        /// Fetch a recipient's faucet record together with its merkle proof envelope (hex fields decoded to
+        /// bytes and the proof array converted to <see cref="ProofNode"/>s ready for verification).
+        /// </summary>
+        private static async Task<FaucetProofEnvelope> QueryFaucetWithProofAsync(string pluginUrl, string address)
+        {
+            var respBody = await GetRawJsonAsync($"{pluginUrl}/v1/query/faucets?address={address}");
+            var root = JsonNode.Parse(respBody)!;
+
+            var height = root["height"]?.GetValue<ulong>() ?? 0UL;
+            var stateRoot = BLSCrypto.HexToBytes(root["stateRoot"]?.GetValue<string>() ?? "");
+            var key = BLSCrypto.HexToBytes(root["key"]?.GetValue<string>() ?? "");
+            var exists = root["exists"]?.GetValue<bool>() ?? false;
+            var value = BLSCrypto.HexToBytes(root["value"]?.GetValue<string>() ?? "");
+
+            var proof = new List<ProofNode>();
+            if (root["proof"] is JsonArray array)
+            {
+                foreach (var node in array)
+                {
+                    if (node == null) continue;
+                    var nodeKey = BLSCrypto.HexToBytes(node["key"]?.GetValue<string>() ?? "");
+                    var nodeValue = BLSCrypto.HexToBytes(node["value"]?.GetValue<string>() ?? "");
+                    var bitmask = node["bitmask"]?.GetValue<int>() ?? 0;
+                    proof.Add(new ProofNode(nodeKey, nodeValue, bitmask));
+                }
+            }
+
+            return new FaucetProofEnvelope(height, stateRoot, key, exists, value, proof);
+        }
+
+        /// <summary>
+        /// Returns a copy of b with its first byte flipped (or a single byte if empty), so the result is
+        /// guaranteed to differ from the original. Used to tamper proof inputs.
+        /// </summary>
+        private static byte[] FlipFirstByte(byte[] b)
+        {
+            if (b == null || b.Length == 0) return new byte[] { 0xff };
+            var outb = (byte[])b.Clone();
+            outb[0] ^= 0xff;
+            return outb;
+        }
+
+        /// <summary>
+        /// Returns a deep copy of a proof list so a test can tamper one node in isolation.
+        /// </summary>
+        private static List<ProofNode> CloneProof(IReadOnlyList<ProofNode> input)
+        {
+            var outp = new List<ProofNode>(input.Count);
+            foreach (var n in input)
+            {
+                outp.Add(new ProofNode((byte[])n.Key.Clone(), (byte[])n.Value.Clone(), n.Bitmask));
+            }
+            return outp;
         }
 
         /// <summary>

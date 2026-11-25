@@ -830,8 +830,19 @@ func JoinLenPrefix(toAppend ...[]byte) []byte {
 	return res
 }
 
-// DecodeLengthPrefixed() decodes a key that is delimited by the length of the segment in a single byte
+// DecodeLengthPrefixed() decodes a length-prefixed key; panics on a corrupt key (internal callers pass
+// well-formed keys). Use DecodeLengthPrefixedSafe() for untrusted input
 func DecodeLengthPrefixed(key []byte) (segments [][]byte) {
+	segments, ok := DecodeLengthPrefixedSafe(key)
+	if !ok {
+		panic("corrupt or incomplete key")
+	}
+	// exit
+	return
+}
+
+// DecodeLengthPrefixedSafe() is DecodeLengthPrefixed() but reports a corrupt key via ok=false instead of panicking
+func DecodeLengthPrefixedSafe(key []byte) (segments [][]byte, ok bool) {
 	// create a variable to be 're-used' to track the length part of each prefix
 	var length int
 	// until the end of 'key'
@@ -840,15 +851,15 @@ func DecodeLengthPrefixed(key []byte) (segments [][]byte) {
 		length = int(key[i])
 		// increment the index
 		i++
-		// do a sanity check on the key
+		// sanity check on the key
 		if i+length > len(key) {
-			panic("corrupt or incomplete key")
+			return nil, false
 		}
 		// add this portion to the segments list
 		segments = append(segments, key[i:i+length])
 	}
 	// exit
-	return
+	return segments, true
 }
 
 // Retry is a simple exponential backoff retry structure in the form of doubling the timeout

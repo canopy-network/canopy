@@ -11,22 +11,23 @@ import (
 
 const (
 	// Names for each Transaction Message (payload) type
-	MessageSendName                 = "send"
-	MessageStakeName                = "stake"
-	MessageUnstakeName              = "unstake"
-	MessageEditStakeName            = "editStake"
-	MessagePauseName                = "pause"
-	MessageUnpauseName              = "unpause"
-	MessageChangeParameterName      = "changeParameter"
-	MessageDAOTransferName          = "daoTransfer"
-	MessageCertificateResultsName   = "certificateResults"
-	MessageSubsidyName              = "subsidy"
-	MessageCreateOrderName          = "createOrder"
-	MessageEditOrderName            = "editOrder"
-	MessageDeleteOrderName          = "deleteOrder"
-	MessageDexLimitOrderName        = "dexLimitOrder"
-	MessageDexLiquidityDepositName  = "dexLiquidityDeposit"
-	MessageDexLiquidityWithdrawName = "dexLiquidityWithdraw"
+	MessageSendName                  = "send"
+	MessageStakeName                 = "stake"
+	MessageUnstakeName               = "unstake"
+	MessageEditStakeName             = "editStake"
+	MessagePauseName                 = "pause"
+	MessageUnpauseName               = "unpause"
+	MessageChangeParameterName       = "changeParameter"
+	MessageDAOTransferName           = "daoTransfer"
+	MessageChangeByzantineOutputName = "changeByzantineOutput"
+	MessageCertificateResultsName    = "certificateResults"
+	MessageSubsidyName               = "subsidy"
+	MessageCreateOrderName           = "createOrder"
+	MessageEditOrderName             = "editOrder"
+	MessageDeleteOrderName           = "deleteOrder"
+	MessageDexLimitOrderName         = "dexLimitOrder"
+	MessageDexLiquidityDepositName   = "dexLiquidityDeposit"
+	MessageDexLiquidityWithdrawName  = "dexLiquidityWithdraw"
 )
 
 func init() {
@@ -39,6 +40,7 @@ func init() {
 	lib.RegisteredMessages[MessageUnpauseName] = new(MessageUnpause)
 	lib.RegisteredMessages[MessageChangeParameterName] = new(MessageChangeParameter)
 	lib.RegisteredMessages[MessageDAOTransferName] = new(MessageDAOTransfer)
+	lib.RegisteredMessages[MessageChangeByzantineOutputName] = new(MessageChangeByzantineOutput)
 	lib.RegisteredMessages[MessageCertificateResultsName] = new(MessageCertificateResults)
 	lib.RegisteredMessages[MessageSubsidyName] = new(MessageSubsidy)
 	lib.RegisteredMessages[MessageCreateOrderName] = new(MessageCreateOrder)
@@ -468,6 +470,72 @@ type jsonMessageDaoTransfer struct {
 	StartHeight  uint64       `json:"startHeight"`
 	EndHeight    uint64       `json:"endHeight"`
 	ProposalHash string       `json:"proposalHash,omitempty"`
+}
+
+var _ lib.MessageI = &MessageChangeByzantineOutput{} // interface enforcement
+
+// Check() validates the governance proposal used to redirect an unstaking Validator's returned stake.
+func (x *MessageChangeByzantineOutput) Check() lib.ErrorI {
+	if err := checkAddress(x.ValidatorAddress); err != nil {
+		return err
+	}
+	if err := checkOutputAddress(x.OutputAddress); err != nil {
+		return err
+	}
+	if err := checkAddress(x.Signer); err != nil {
+		return err
+	}
+	if err := checkStartEndHeight(x); err != nil {
+		return err
+	}
+	if x.ProposalHash != "" {
+		return ErrInvalidProposalHash()
+	}
+	return nil
+}
+
+func (x *MessageChangeByzantineOutput) Name() string { return MessageChangeByzantineOutputName }
+func (x *MessageChangeByzantineOutput) New() lib.MessageI {
+	return new(MessageChangeByzantineOutput)
+}
+func (x *MessageChangeByzantineOutput) Recipient() []byte { return nil }
+
+// MarshalJSON() is the json.Marshaller implementation for MessageChangeByzantineOutput.
+func (x MessageChangeByzantineOutput) MarshalJSON() ([]byte, error) {
+	return json.Marshal(jsonMessageChangeByzantineOutput{
+		ValidatorAddress: x.ValidatorAddress,
+		OutputAddress:    x.OutputAddress,
+		Signer:           x.Signer,
+		StartHeight:      x.StartHeight,
+		EndHeight:        x.EndHeight,
+		ProposalHash:     x.ProposalHash,
+	})
+}
+
+// UnmarshalJSON() is the json.Unmarshaler implementation for MessageChangeByzantineOutput.
+func (x *MessageChangeByzantineOutput) UnmarshalJSON(b []byte) (err error) {
+	var j jsonMessageChangeByzantineOutput
+	if err = json.Unmarshal(b, &j); err != nil {
+		return
+	}
+	*x = MessageChangeByzantineOutput{
+		ValidatorAddress: j.ValidatorAddress,
+		OutputAddress:    j.OutputAddress,
+		Signer:           j.Signer,
+		StartHeight:      j.StartHeight,
+		EndHeight:        j.EndHeight,
+		ProposalHash:     j.ProposalHash,
+	}
+	return
+}
+
+type jsonMessageChangeByzantineOutput struct {
+	ValidatorAddress lib.HexBytes `json:"validatorAddress"`
+	OutputAddress    lib.HexBytes `json:"outputAddress"`
+	Signer           lib.HexBytes `json:"signer"`
+	StartHeight      uint64       `json:"startHeight"`
+	EndHeight        uint64       `json:"endHeight"`
+	ProposalHash     string       `json:"proposalHash,omitempty"`
 }
 
 var _ lib.MessageI = &MessageCertificateResults{} // interface enforcement

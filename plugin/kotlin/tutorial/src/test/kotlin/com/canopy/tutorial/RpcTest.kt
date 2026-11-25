@@ -7,10 +7,12 @@ import com.google.protobuf.Any
 import com.google.protobuf.ByteString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.long
 import org.junit.jupiter.api.Assumptions
 import org.junit.jupiter.api.Test
@@ -52,6 +54,12 @@ class RpcTest {
         private const val NETWORK_ID = 1L
         private const val CHAIN_ID = 1L
         private const val TEST_PASSWORD = "testpassword123"
+
+        // faucetConfiguredAmount is the fixed amount (uCNPY) the plugin mints per faucet transaction.
+        // The faucet amount is NO LONGER supplied over RPC; it is operator-controlled via config.json
+        // `pluginConfig.faucetAmount` (forwarded to the plugin at handshake — see TUTORIAL.md). Keep
+        // this constant in sync with the `faucetAmount` configured in the node's config.json.
+        private const val FAUCET_CONFIGURED_AMOUNT = 1000000000L // 1000 tokens
         
         private val json = Json { ignoreUnknownKeys = true }
         private val httpClient = HttpClient.newBuilder()
@@ -92,18 +100,17 @@ class RpcTest {
         // Get account 1's key for signing
         val account1Key = keystoreGetKey(ADMIN_RPC_URL, account1Addr, TEST_PASSWORD)
         
-        // Step 2: Use faucet to add balance to account 1
+        // Step 2: Use faucet to add balance to account 1. The faucet amount is NOT passed here; it is
+        // taken from the plugin's pluginConfig.faucetAmount, so we assert the minted amount matches it.
         println("\nStep 2: Using faucet to add balance to account 1...")
         
-        val faucetAmount = 1000000000L  // 1000 tokens
         val faucetFee = 10000L
-        println("  Amount: $faucetAmount, Fee: $faucetFee")
+        println("  Amount (from pluginConfig): $FAUCET_CONFIGURED_AMOUNT, Fee: $faucetFee")
         
         val faucetTxHash = sendFaucetTx(
             QUERY_RPC_URL,
             account1Key,
             account1Addr,
-            faucetAmount,
             faucetFee,
             NETWORK_ID,
             CHAIN_ID,
@@ -127,6 +134,14 @@ class RpcTest {
         val bal1AfterFaucet = getAccountBalance(QUERY_RPC_URL, account1Addr)
         val bal2AfterFaucet = getAccountBalance(QUERY_RPC_URL, account2Addr)
         println("  Balances after faucet - Account 1: $bal1AfterFaucet, Account 2: $bal2AfterFaucet")
+
+        // Validate the faucet minted exactly pluginConfig.faucetAmount (account 1 started empty),
+        // proving the amount came from the plugin's config and not from the RPC request.
+        assertTrue(
+            bal1AfterFaucet == FAUCET_CONFIGURED_AMOUNT,
+            "faucet minted $bal1AfterFaucet to account 1, want pluginConfig.faucetAmount=$FAUCET_CONFIGURED_AMOUNT"
+        )
+        println("  Faucet minted the configured pluginConfig.faucetAmount ($FAUCET_CONFIGURED_AMOUNT) as expected")
         
         // Step 3: Send tokens from account 1 to account 2
         println("\nStep 3: Sending tokens from account 1 to account 2...")
@@ -233,6 +248,35 @@ class RpcTest {
     )
 
     /**
+     * Holds the JSON shape returned by the plugin's by-address /v1/query/faucets endpoint, which
+     * (in addition to the convenience `faucet` view) returns a verifiable merkle proof and the
+     * committed state root / height the proof commits to.
+     */
+    data class FaucetProof(
+        val height: Long,
+        val stateRoot: String,
+        val key: String,
+        val exists: Boolean,
+        val value: String,
+        val proofSize: Int,
+        val faucet: FaucetRecord
+    )
+
+    /**
+     * Holds the full proof-carrying JSON shape of /v1/query/faucets?address=<hex>: the committed
+     * value, state root, and height plus the decoded sparse-merkle-tree proof nodes needed to verify
+     * the answer trustlessly against an independently authenticated root.
+     */
+    data class FaucetProofEnvelope(
+        val height: Long,
+        val stateRoot: String,
+        val key: String,
+        val exists: Boolean,
+        val value: String,
+        val proof: List<ProofNode>
+    )
+
+    /**
      * Holds the JSON shape returned by the plugin's /v1/query/rewards endpoint.
      */
     data class RewardRecord(
@@ -298,42 +342,53 @@ class RpcTest {
 
         val fee = 10000L
 
-        // Step 2: Faucet the recipient twice and verify the aggregated faucet record
-        val faucetAmount1 = 700000000L
-        val faucetAmount2 = 300000000L
-
-        println("\nStep 2: Sending first faucet to recipient (amount=$faucetAmount1, fee=$fee)...")
+        // Step 2: Faucet the recipient twice and verify the aggregated faucet record. Each faucet
+        // mints the fixed pluginConfig.faucetAmount (not an RPC-supplied amount), so the record
+        // should aggregate in multiples of that configured amount.
+        println("\nStep 2: Sending first faucet to recipient (amount from pluginConfig=$FAUCET_CONFIGURED_AMOUNT, fee=$fee)...")
         var height = getHeight(QUERY_RPC_URL)
         println("  Current height: $height")
-        var txHash = sendFaucetTx(QUERY_RPC_URL, recipientKey, recipientAddr, faucetAmount1, fee, networkId, chainId, height)
+        var txHash = sendFaucetTx(QUERY_RPC_URL, recipientKey, recipientAddr, fee, networkId, chainId, height)
         println("  First faucet transaction sent: $txHash")
 
         println("  Waiting for first faucet transaction to be confirmed...")
         assertTrue(waitForTxInclusion(QUERY_RPC_URL, recipientAddr, txHash, txTimeoutMs), "First faucet tx not included")
         println("  First faucet transaction confirmed!")
 
-        // after the first faucet, the record should exist with count=1 and totalAmount=faucetAmount1
+        // after the first faucet, the record should exist with count=1 and totalAmount=pluginConfig.faucetAmount
         println("  Querying plugin endpoint GET /v1/query/faucets?address=$recipientAddr ...")
         var faucet = pollFaucetRecordUntil(recipientAddr, 1, recordTimeoutMs)
             ?: fail("Failed to query faucet record after first faucet")
         println("  Faucet record after first faucet: recipient=${faucet.recipientAddress} totalAmount=${faucet.totalAmount} count=${faucet.count}")
         assertTrue(faucet.count == 1L, "faucet count after first faucet = ${faucet.count}, want 1")
-        assertTrue(faucet.totalAmount == faucetAmount1, "faucet totalAmount after first faucet = ${faucet.totalAmount}, want $faucetAmount1")
+        assertTrue(faucet.totalAmount == FAUCET_CONFIGURED_AMOUNT, "faucet totalAmount after first faucet = ${faucet.totalAmount}, want pluginConfig.faucetAmount=$FAUCET_CONFIGURED_AMOUNT")
         assertTrue(faucet.recipientAddress.equals(recipientAddr, ignoreCase = true), "faucet recipientAddress = ${faucet.recipientAddress}, want $recipientAddr")
         println("  Faucet record verified after first faucet (count=1)")
 
-        println("\n  Sending second faucet to recipient (amount=$faucetAmount2, fee=$fee)...")
+        // The by-address endpoint also returns a verifiable merkle proof plus the committed
+        // stateRoot/height it was read at. A trustless client authenticates the stateRoot
+        // independently (via the quorum certificate) and verifies the proof against it.
+        println("  Verifying the by-address faucet record carries a verifiable merkle proof...")
+        val faucetProof = queryFaucetProof(recipientAddr)
+        println("  Proof response: exists=${faucetProof.exists} height=${faucetProof.height} stateRootLen=${faucetProof.stateRoot.length} proofNodes=${faucetProof.proofSize}")
+        assertTrue(faucetProof.stateRoot.isNotEmpty(), "faucet proof response missing a non-empty stateRoot")
+        assertTrue(faucetProof.height > 0L, "faucet proof height = ${faucetProof.height}, want > 0")
+        assertTrue(faucetProof.proofSize > 0, "faucet proof is empty (want a non-empty merkle proof)")
+        assertTrue(faucetProof.exists, "faucet proof exists = false, want true for an existing record")
+        println("  Verifiable proof confirmed (exists=true, non-empty stateRoot/proof, height>0)")
+
+        println("\n  Sending second faucet to recipient (amount from pluginConfig=$FAUCET_CONFIGURED_AMOUNT, fee=$fee)...")
         height = getHeight(QUERY_RPC_URL)
         println("  Current height: $height")
-        txHash = sendFaucetTx(QUERY_RPC_URL, recipientKey, recipientAddr, faucetAmount2, fee, networkId, chainId, height)
+        txHash = sendFaucetTx(QUERY_RPC_URL, recipientKey, recipientAddr, fee, networkId, chainId, height)
         println("  Second faucet transaction sent: $txHash")
 
         println("  Waiting for second faucet transaction to be confirmed...")
         assertTrue(waitForTxInclusion(QUERY_RPC_URL, recipientAddr, txHash, txTimeoutMs), "Second faucet tx not included")
         println("  Second faucet transaction confirmed!")
 
-        // after the second faucet, count should be 2 and totalAmount the sum of both
-        val wantTotal = faucetAmount1 + faucetAmount2
+        // after the second faucet, count should be 2 and totalAmount twice the configured faucet amount
+        val wantTotal = 2 * FAUCET_CONFIGURED_AMOUNT
         println("  Waiting for faucet record to reflect the second faucet (count=2)...")
         faucet = pollFaucetRecordUntil(recipientAddr, 2, recordTimeoutMs)
             ?: fail("Failed to query faucet record after second faucet")
@@ -360,7 +415,7 @@ class RpcTest {
         println("\nStep 3: Funding admin via faucet so it can pay the reward fee...")
         height = getHeight(QUERY_RPC_URL)
         println("  Current height: $height")
-        txHash = sendFaucetTx(QUERY_RPC_URL, adminKey, adminAddr, 100000000L, fee, networkId, chainId, height)
+        txHash = sendFaucetTx(QUERY_RPC_URL, adminKey, adminAddr, fee, networkId, chainId, height)
         println("  Admin faucet transaction sent: $txHash")
 
         println("  Waiting for admin faucet transaction to be confirmed...")
@@ -427,6 +482,104 @@ class RpcTest {
         println("  curl '$PLUGIN_RPC_URL/v1/query/rewards?address=$recipientAddr'")
         println("  curl '$PLUGIN_RPC_URL/v1/query/faucets'")
         println("  curl '$PLUGIN_RPC_URL/v1/query/rewards'")
+    }
+
+    /**
+     * Proves the merkle proof actually does its job. It funds a recipient so a real membership proof
+     * exists, fetches the honest proof from the plugin RPC endpoint and confirms it VERIFIES against
+     * the returned state root, then tampers each input (the value, a proof node, the root, and the
+     * key) and asserts verification now FAILS. A client that trusts the node blindly could be lied
+     * to; a client that verifies the proof cannot.
+     *
+     * NOTE: like the other tutorial tests this is a live integration test. It verifies against the
+     * root the node returned; a production client authenticates that root independently via the
+     * quorum certificate before trusting it (see the verify docs in Verify.kt). Skips gracefully if
+     * the plugin RPC server is not reachable.
+     */
+    @Test
+    fun testFaucetProofTamperDetected() {
+        println("=== Kotlin Faucet Proof Tamper-Detection Test ===\n")
+
+        val networkId = NETWORK_ID
+        val chainId = CHAIN_ID
+        val txTimeoutMs = 120_000L
+        val recordTimeoutMs = 60_000L
+
+        // skip when the plugin RPC server isn't reachable (consistent with the other tutorial tests)
+        println("Checking plugin RPC server reachability at $PLUGIN_RPC_URL ...")
+        val reachable = try {
+            getRawJson("$PLUGIN_RPC_URL/v1/query/faucets")
+            true
+        } catch (e: Exception) {
+            println("  Plugin RPC server not reachable: ${e.message}")
+            false
+        }
+        Assumptions.assumeTrue(
+            reachable,
+            "plugin RPC server not reachable at $PLUGIN_RPC_URL (is Canopy running with the kotlin plugin and port 50010 exposed?)"
+        )
+        println("Plugin RPC server is reachable")
+
+        // fund a fresh recipient so a membership proof exists for its faucet record
+        val suffix = randomSuffix()
+        val recipientAddr = keystoreNewKey(ADMIN_RPC_URL, "test_proof_$suffix", TEST_PASSWORD)
+        println("  Created recipient account: $recipientAddr")
+        val recipientKey = keystoreGetKey(ADMIN_RPC_URL, recipientAddr, TEST_PASSWORD)
+
+        val height = getHeight(QUERY_RPC_URL)
+        println("  Current height: $height")
+        val txHash = sendFaucetTx(QUERY_RPC_URL, recipientKey, recipientAddr, 10000L, networkId, chainId, height)
+        println("  Faucet transaction sent: $txHash")
+        assertTrue(waitForTxInclusion(QUERY_RPC_URL, recipientAddr, txHash, txTimeoutMs), "faucet tx not included")
+        println("  Faucet transaction confirmed!")
+        pollFaucetRecordUntil(recipientAddr, 1, recordTimeoutMs)
+            ?: fail("faucet record did not appear")
+
+        // fetch the honest proof envelope
+        val env = queryFaucetProofEnvelope(recipientAddr)
+        println("  Proof response: exists=${env.exists} height=${env.height} proofNodes=${env.proof.size}")
+        assertTrue(
+            env.exists && env.proof.isNotEmpty(),
+            "expected a membership proof; got exists=${env.exists} proofNodes=${env.proof.size}"
+        )
+
+        val key = env.key.hexToBytes()
+        val value = env.value.hexToBytes()
+        val root = env.stateRoot.hexToBytes()
+        val proof = env.proof
+
+        // positive control: the honest proof MUST verify against the returned state root
+        assertTrue(
+            verifyKeyProof(key, value, true, root, proof),
+            "honest faucet proof failed to verify against the state root"
+        )
+        println("  Honest faucet proof verified (${proof.size} node(s)) against the state root")
+
+        // negative cases: each tampered input MUST be rejected (verifyKeyProof returns false)
+        assertTrue(
+            !verifyKeyProof(key, flipFirstByte(value), true, root, proof),
+            "verification ACCEPTED a tampered value (expected failure)"
+        )
+
+        val badProof = cloneProof(proof)
+        badProof[0] = ProofNode(badProof[0].key, flipFirstByte(badProof[0].value), badProof[0].bitmask)
+        assertTrue(
+            !verifyKeyProof(key, value, true, root, badProof),
+            "verification ACCEPTED a tampered proof node (expected failure)"
+        )
+
+        assertTrue(
+            !verifyKeyProof(key, value, true, flipFirstByte(root), proof),
+            "verification ACCEPTED a tampered state root (expected failure)"
+        )
+
+        assertTrue(
+            !verifyKeyProof(flipFirstByte(key), value, true, root, proof),
+            "verification ACCEPTED a proof for the wrong key (expected failure)"
+        )
+
+        println("  All tampered faucet proofs were correctly rejected by the verifier")
+        println("\n--- Faucet proof tamper-detection verified successfully! ---")
     }
     
     // ============ Helper Functions ============
@@ -578,22 +731,22 @@ class RpcTest {
     }
     
     /**
-     * Send a faucet transaction.
+     * Send a faucet transaction. Note there is no amount parameter: the minted amount comes from the
+     * plugin's pluginConfig.faucetAmount, not from the caller/RPC.
      */
     private fun sendFaucetTx(
         rpcUrl: String,
         signerKey: KeyGroup,
         recipientAddr: String,
-        amount: Long,
         fee: Long,
         networkId: Long,
         chainId: Long,
         height: Long
     ): String {
+        // Create the faucet message (no amount — it is set by pluginConfig.faucetAmount)
         val faucetMsg = mapOf(
             "signerAddress" to signerKey.address,
-            "recipientAddress" to recipientAddr,
-            "amount" to amount
+            "recipientAddress" to recipientAddr
         )
         
         return buildSignAndSendTx(rpcUrl, signerKey, "faucet", faucetMsg, fee, networkId, chainId, height)
@@ -696,7 +849,6 @@ class RpcTest {
                 MessageFaucet.newBuilder()
                     .setSignerAddress(ByteString.copyFrom(signerAddr))
                     .setRecipientAddress(ByteString.copyFrom(recipientAddr))
-                    .setAmount(msgJson["amount"] as Long)
                     .build()
                     .toByteArray()
             }
@@ -807,6 +959,67 @@ class RpcTest {
         val faucetObj = result["faucet"]?.jsonObject ?: return FaucetRecord("", 0L, 0L)
         return parseFaucetObject(faucetObj)
     }
+
+    /**
+     * Fetch a single recipient's faucet record along with its verifiable merkle proof and the
+     * committed stateRoot/height from the by-address plugin RPC endpoint.
+     */
+    private fun queryFaucetProof(address: String): FaucetProof {
+        val respBody = getRawJson("$PLUGIN_RPC_URL/v1/query/faucets?address=$address")
+        val result = json.parseToJsonElement(respBody).jsonObject
+        val faucetObj = result["faucet"]?.jsonObject
+        return FaucetProof(
+            height = result["height"]?.jsonPrimitive?.long ?: 0L,
+            stateRoot = result["stateRoot"]?.jsonPrimitive?.content ?: "",
+            key = result["key"]?.jsonPrimitive?.content ?: "",
+            exists = result["exists"]?.jsonPrimitive?.booleanOrNull ?: false,
+            value = result["value"]?.jsonPrimitive?.content ?: "",
+            proofSize = result["proof"]?.jsonArray?.size ?: 0,
+            faucet = if (faucetObj != null) parseFaucetObject(faucetObj) else FaucetRecord("", 0L, 0L)
+        )
+    }
+
+    /**
+     * Fetch a recipient's faucet record together with the committed value, state root, height, and
+     * the fully-decoded sparse-merkle-tree proof nodes from the by-address plugin RPC endpoint.
+     */
+    private fun queryFaucetProofEnvelope(address: String): FaucetProofEnvelope {
+        val respBody = getRawJson("$PLUGIN_RPC_URL/v1/query/faucets?address=$address")
+        val result = json.parseToJsonElement(respBody).jsonObject
+        val proofNodes = result["proof"]?.jsonArray?.map { element ->
+            val obj = element.jsonObject
+            ProofNode(
+                key = (obj["key"]?.jsonPrimitive?.content ?: "").hexToBytes(),
+                value = (obj["value"]?.jsonPrimitive?.content ?: "").hexToBytes(),
+                bitmask = obj["bitmask"]?.jsonPrimitive?.int ?: 0
+            )
+        } ?: emptyList()
+        return FaucetProofEnvelope(
+            height = result["height"]?.jsonPrimitive?.long ?: 0L,
+            stateRoot = result["stateRoot"]?.jsonPrimitive?.content ?: "",
+            key = result["key"]?.jsonPrimitive?.content ?: "",
+            exists = result["exists"]?.jsonPrimitive?.booleanOrNull ?: false,
+            value = result["value"]?.jsonPrimitive?.content ?: "",
+            proof = proofNodes
+        )
+    }
+
+    /**
+     * Return a copy of b with its first byte flipped (or a single byte if empty), so the result is
+     * guaranteed to differ from the original. Used to tamper proof inputs.
+     */
+    private fun flipFirstByte(b: ByteArray): ByteArray {
+        if (b.isEmpty()) return byteArrayOf(0xff.toByte())
+        val out = b.copyOf()
+        out[0] = (out[0].toInt() xor 0xff).toByte()
+        return out
+    }
+
+    /**
+     * Return a deep copy of a proof list so a test can tamper one node in isolation.
+     */
+    private fun cloneProof(input: List<ProofNode>): MutableList<ProofNode> =
+        input.map { ProofNode(it.key.copyOf(), it.value.copyOf(), it.bitmask) }.toMutableList()
 
     /**
      * Fetch all faucet records from the plugin RPC server (range read).

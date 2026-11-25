@@ -1,6 +1,8 @@
 package crypto
 
 import (
+	"bytes"
+	ed25519 "crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -150,4 +152,20 @@ func NewPrivateKeyFromBytes(bz []byte) (PrivateKeyI, error) {
 	default:
 		return nil, fmt.Errorf("unrecognized private key format: %d", len(bz))
 	}
+}
+
+// NewPrivateKeyFromBytesWithPublicKey() creates a new PrivateKeyI from bytes, using the recorded public
+// key to disambiguate a 32-byte key that could be a BLS12-381 key or an ED25519 seed (as exported by
+// the launchpad); falls back to length-based detection otherwise
+func NewPrivateKeyFromBytesWithPublicKey(bz []byte, recordedPublicKey []byte) (PrivateKeyI, error) {
+	// a 32-byte key is ambiguous (BLS12-381 vs ED25519 seed): use the recorded public key to decide
+	if len(bz) == BLS12381PrivKeySize && len(recordedPublicKey) == Ed25519PubKeySize {
+		// ED25519-sized public key: treat the 32 bytes as an ED25519 seed
+		edPriv := BytesToED25519Private(ed25519.NewKeyFromSeed(bz))
+		if bytes.Equal(edPriv.PublicKey().Bytes(), recordedPublicKey) {
+			return edPriv, nil
+		}
+	}
+	// default: length-based detection (legacy 32-byte BLS and 64-byte ED25519 keys)
+	return NewPrivateKeyFromBytes(bz)
 }

@@ -69,13 +69,14 @@ message MessageReward {
 
 // MessageFaucet is a test-only transaction that mints tokens to any address
 // No balance check required - just mints tokens for testing purposes
+// NOTE: there is intentionally NO `amount` field. The minted amount is operator-controlled via
+// config.json `pluginConfig.faucetAmount` (forwarded to the plugin at handshake), not supplied
+// per-transaction over RPC.
 message MessageFaucet {
   // signer_address: the address signing this transaction (for auth)
   bytes signer_address = 1; // @gotags: json:"signerAddress"
   // recipient_address: who receives the tokens
   bytes recipient_address = 2; // @gotags: json:"recipientAddress"
-  // amount: tokens to mint
-  uint64 amount = 3;
 }
 
 // Faucet is a state record tracking the cumulative faucet mints to a recipient (test-only)

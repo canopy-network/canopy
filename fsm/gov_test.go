@@ -133,6 +133,15 @@ func TestUpdateParam(t *testing.T) {
 				value: &lib.UInt64Wrapper{Value: 100},
 			},
 		},
+		{
+			name:   "change byzantine output fee param updated",
+			detail: "an update to the change byzantine output tx fee under the fee param space",
+			update: paramUpdate{
+				space: "fee",
+				name:  ParamChangeByzantineOutputFee,
+				value: &lib.UInt64Wrapper{Value: 200},
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -171,6 +180,8 @@ func TestUpdateParam(t *testing.T) {
 				require.Equal(t, uint64Value.Value, got.Governance.DaoRewardPercentage)
 			case ParamCertificateResultsFee: // fee
 				require.Equal(t, uint64Value.Value, got.Fee.CertificateResultsFee)
+			case ParamChangeByzantineOutputFee: // fee
+				require.Equal(t, uint64Value.Value, got.Fee.ChangeByzantineOutputFee)
 			}
 		})
 	}

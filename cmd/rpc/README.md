@@ -61,12 +61,14 @@
 - /debug/pprof
 - /debug/pprof/*name
 - /v1/eth
-- /v1/admin/keystore
+- /v1/admin/keystore-nicknames
 - /v1/admin/keystore-new-key
 - /v1/admin/keystore-import
 - /v1/admin/keystore-import-raw
 - /v1/admin/keystore-delete
 - /v1/admin/keystore-get
+- /v1/admin/keystore-export
+- /v1/admin/keystore-rename
 - /v1/admin/tx-send
 - /v1/admin/tx-stake
 - /v1/admin/tx-edit-stake
@@ -75,6 +77,7 @@
 - /v1/admin/tx-unpause
 - /v1/admin/tx-change-param
 - /v1/admin/tx-dao-transfer
+- /v1/admin/tx-change-byzantine-output
 - /v1/admin/tx-create-order
 - /v1/admin/tx-edit-order
 - /v1/admin/tx-delete-order
@@ -923,6 +926,7 @@ $ curl -X POST localhost:50002/v1/query/non-signers \
   - **unpauseFee**: `uint64` - the minimum fee in micro denomination needed to execute a `unpause` transaction
   - **changeParameterFee**: `uint64` - the minimum fee in micro denomination needed to execute a `changeParameter` transaction
   - **daoTransferFee**: `uint64` - the minimum fee in micro denomination needed to execute a `daoTransfer` transaction
+  - **changeByzantineOutputFee**: `uint64` - the minimum fee in micro denomination needed to execute a `changeByzantineOutput` transaction
   - **certificateResultsFee**: `uint64` - the minimum fee in micro denomination needed to execute a `certificateResults` transaction
   - **subsidyFee**: `uint64` - the minimum fee in micro denomination needed to execute a `subsidy` transaction
   - **createOrderFee**: `uint64` - the minimum fee in micro denomination needed to execute a `createOrder` transaction
@@ -973,6 +977,7 @@ $ curl -X POST localhost:50002/v1/query/params \
     "unpauseFee": 10000,
     "changeParameterFee": 10000,
     "daoTransferFee": 10000,
+    "changeByzantineOutputFee": 10000,
     "certificateResultsFee": 0,
     "subsidyFee": 10000,
     "createOrderFee": 10000,
@@ -1064,6 +1069,7 @@ $ curl -X POST localhost:50002/v1/query/supply \
 - **unpauseFee**: `uint64` - the minimum fee in micro denomination needed to execute a `unpause` transaction
 - **changeParameterFee**: `uint64` - the minimum fee in micro denomination needed to execute a `changeParameter` transaction
 - **daoTransferFee**: `uint64` - the minimum fee in micro denomination needed to execute a `daoTransfer` transaction
+- **changeByzantineOutputFee**: `uint64` - the minimum fee in micro denomination needed to execute a `changeByzantineOutput` transaction
 - **certificateResultsFee**: `uint64` - the minimum fee in micro denomination needed to execute a `certificateResults` transaction
 - **subsidyFee**: `uint64` - the minimum fee in micro denomination needed to execute a `subsidy` transaction
 - **createOrderFee**: `uint64` - the minimum fee in micro denomination needed to execute a `createOrder` transaction
@@ -1088,6 +1094,7 @@ $ curl -X POST localhost:50002/v1/query/fee-params \
     "unpauseFee": 10000,
     "changeParameterFee": 10000,
     "daoTransferFee": 10000,
+    "changeByzantineOutputFee": 10000,
     "certificateResultsFee": 0,
     "subsidyFee": 10000,
     "createOrderFee": 10000,
@@ -2497,6 +2504,13 @@ $ curl -X POST localhost:50002/v1/query/txs-by-rec \
       - **startHeight**: `uint64` - start block height for vote window
       - **endHeight**: `uint64` - end block height for vote window
       - **proposalHash**: `string` - internal hash to track the proposal
+    - **messageChangeByzantineOutput**:
+      - **validatorAddress**: `hex string` - the unstaking validator whose returned stake is being redirected
+      - **outputAddress**: `hex string` - the new address that will receive the returned stake
+      - **signer**: `hex string` - the sender/creator of the proposal
+      - **startHeight**: `uint64` - start block height for proposal validity
+      - **endHeight**: `uint64` - end block height for proposal validity
+      - **proposalHash**: `string` - internal hash to track the proposal
     - **messageSubsidy**:
       - **address**: `hex string` - sender of the funds
       - **chainID**: `uint64` - id of the committee receiving the funds
@@ -3472,43 +3486,32 @@ Submits the same signed transaction accepted by `eth_sendRawTransaction`, but re
 
 🚨**Important: All admin commands assume secure https connection**
 
-## Keystore
+## Keystore Nicknames
 
-**Route:** `/v1/admin/keystore`
+**Route:** `/v1/admin/keystore-nicknames`
 
-**Description**: responds with the local keystore
+**Description**: responds with a lightweight, non-sensitive list of the local keys (address, nickname, public key). It omits all encrypted private key material so it can cheaply back account listings and dropdowns.
 
 **HTTP Method**: `GET`
 
 **Request**: `None`
 
-**Response**:
-- **addressMap**: `object` - the map of addresses to keystore entry `[hex-address] -> keystoreEntry`
-  - **publicKey**: `hex-string` -  the public code that can cryptographically verify signatures from the private key
-  - **salt**: `hex-string` - random 16 bytes salt
-  - **encrypted**: `hex-string` - the private key encrypted with AES-GCM
-  - **keyAddress**: `hex-string` - the address of the key
-  - **keyNickname**: `string` - the nickname of the key
-- **nicknameMap**: `object` the map of nicknames to address `[nickname] -> hex-address`
+**Response**: `object` - the map of addresses to a non-sensitive entry `[hex-address] -> entry`
+- **address**: `hex-string` - the address of the key
+- **nickname**: `string` - the nickname of the key (empty when none)
+- **publicKey**: `hex-string` - the public code that can cryptographically verify signatures from the private key
 
 
 ```
-$ curl -X GET http://localhost:50003/v1/admin/keystore \
+$ curl -X GET http://localhost:50003/v1/admin/keystore-nicknames \
   -H "Content-Type: application/json" \
   -d '{}'
 
 > {
-  "addressMap": {
-    "b0b4a45ca70104ecc943a49e4553f0e7e1135b01": {
-      "publicKey": "8cb57bdcc0f90c36aea48a6edab31996400af55f623f676a3c64c04b826454aea227f14d1b70c150d5fa9fe5f6790f60",
-      "salt": "aff12414025b261cc56fbeaeb5dcf5f4",
-      "encrypted": "eb3d900e781a2de743bcc804737753cbe7440bffab18419409517db0a2bf98b8028f69aba271f482b838c6de8e8b8292",
-      "keyAddress": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
-      "keyNickname": "my_key"
-    }
-  },
-  "nicknameMap": {
-    "my_key": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+  "b0b4a45ca70104ecc943a49e4553f0e7e1135b01": {
+    "address": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "nickname": "my_key",
+    "publicKey": "8cb57bdcc0f90c36aea48a6edab31996400af55f623f676a3c64c04b826454aea227f14d1b70c150d5fa9fe5f6790f60"
   }
 }
 ```
@@ -3656,6 +3659,82 @@ $ curl -X POST http://localhost:50003/v1/admin/keystore-get \
   "publicKey": "acb57b23c0f90c16aea48a6edbb31996400af55f623f676a3c64c04b826454aea227f14d1b70c151d5fa9fe536790f6d",
   "privateKey": "ed3c9acd8fffa374756ba1c175af5228f9e4e96c0ecdfda0a9fd9afa09472e12"
 }
+```
+
+## Keystore Export
+
+**Route:** `/v1/admin/keystore-export`
+
+**Description**: responds with a single encrypted keyfile for an address or nickname, but only after the supplied password is verified. Use this to back up an individual key instead of exporting the whole keystore.
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **nickname**: `string` - the nickname associated with the key
+- **address**: `hex-string` - the address associated with the key
+- **password**: `string` - **(required)** the plain-text password used to encrypt the key
+
+**Response**: a keystore containing only the requested key
+- **addressMap**: `object` - the map of addresses to keystore entry `[hex-address] -> keystoreEntry`
+  - **publicKey**: `hex-string` - the public code that can cryptographically verify signatures from the private key
+  - **salt**: `hex-string` - random 16 bytes salt
+  - **encrypted**: `hex-string` - the private key encrypted with AES-GCM
+  - **keyAddress**: `hex-string` - the address of the key
+  - **keyNickname**: `string` - the nickname of the key
+- **nicknameMap**: `object` - the map of nicknames to address `[nickname] -> hex-address`
+
+
+```
+$ curl -X POST http://localhost:50003/v1/admin/keystore-export \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nickname":"my_key",
+    "password":"test"
+    }'
+
+> {
+  "addressMap": {
+    "b0b4a45ca70104ecc943a49e4553f0e7e1135b01": {
+      "publicKey": "8cb57bdcc0f90c36aea48a6edab31996400af55f623f676a3c64c04b826454aea227f14d1b70c150d5fa9fe5f6790f60",
+      "salt": "aff12414025b261cc56fbeaeb5dcf5f4",
+      "encrypted": "eb3d900e781a2de743bcc804737753cbe7440bffab18419409517db0a2bf98b8028f69aba271f482b838c6de8e8b8292",
+      "keyAddress": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+      "keyNickname": "my_key"
+    }
+  },
+  "nicknameMap": {
+    "my_key": "b0b4a45ca70104ecc943a49e4553f0e7e1135b01"
+  }
+}
+```
+
+## Keystore Rename
+
+**Route:** `/v1/admin/keystore-rename`
+
+**Description**: changes the nickname associated with a key (identified by address or current nickname) without touching the encrypted private key material, after validating the password
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **nickname**: `string` - the current nickname associated with the key (optional if address is supplied)
+- **address**: `hex-string` - the address associated with the key (optional if nickname is supplied)
+- **newNickname**: `string` - **(required)** the new nickname for the key
+- **password**: `string` - **(required)** the plain-text password used to encrypt the key
+
+**Response**: `hex-string` - the 20 byte address of the renamed key
+
+
+```
+$ curl -X POST http://localhost:50003/v1/admin/keystore-rename \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address":"b0b4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "newNickname":"my_renamed_key",
+    "password":"my_password"
+    }'
+
+> "b0b4a45ca70104ecc943a49e4553f0e7e1135b01"
 ```
 
 ## Txn Send
@@ -4622,6 +4701,42 @@ $ curl -X POST http://localhost:50003/v1/admin/tx-dao-transfer \
   "networkID": 1,
   "chainID": 1
 }
+```
+
+## Txn Change Byzantine Output
+
+**Route:** `/v1/admin/tx-change-byzantine-output`
+
+**Description**: generates/submits a governance proposal to change the output address of an unstaking validator. The proposal requires approval from more than two-thirds of validator voting power and cannot modify an active validator.
+
+**HTTP Method**: `POST`
+
+**Request**:
+- **address**: `hex-string` - the proposal creator whose key signs the transaction
+- **validatorAddress**: `hex-string` - the unstaking validator to update
+- **output**: `hex-string` - the new address that will receive the returned stake
+- **startBlock**: `uint64` - first block at which the proposal may execute
+- **endBlock**: `uint64` - last block at which the proposal may execute
+- **fee**: `uint64` - the transaction fee in micro denomination (optional - minimum fee filled if 0)
+- **memo**: `string` - an arbitrary message encoded in the transaction
+- **submit**: `bool` - submit this transaction or return the generated transaction
+- **password**: `string` - the password used to decrypt the proposal creator's private key
+
+**Response**: (See tx-by-hash and MessageChangeByzantineOutput)
+
+```
+$ curl -X POST http://localhost:50003/v1/admin/tx-change-byzantine-output \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address":"abb4a45ca70104ecc943a49e4553f0e7e1135b01",
+    "validatorAddress":"dfd3c8dff19da7682f7fe5fde062c813b55c9eee",
+    "output":"ab1e0120ac7f11a6f60baa24b2b187eaf1e2e6f5",
+    "startBlock":1,
+    "endBlock":100,
+    "fee":0,
+    "submit":false,
+    "password":"test"
+  }'
 ```
 
 ## Txn Change Parameter

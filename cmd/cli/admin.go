@@ -42,12 +42,14 @@ func init() {
 	txStakeCmd.PersistentFlags().BoolVar(&earlyWithdrawal, "early-withdrawal", false, "immediately withdrawal any rewards (with penalty) directly to output address instead of auto-compounding directly to stake")
 	txEditStakeCmd.PersistentFlags().BoolVar(&earlyWithdrawal, "early-withdrawal", false, "immediately withdrawal any rewards (with penalty) directly to output address instead of auto-compounding directly to stake")
 	txCreateOrderCmd.PersistentFlags().StringVar(&data, "data", "", "data for create order")
-	adminCmd.AddCommand(ksCmd)
+	adminCmd.AddCommand(ksNicknamesCmd)
 	adminCmd.AddCommand(ksNewKeyCmd)
 	adminCmd.AddCommand(ksImportCmd)
 	adminCmd.AddCommand(ksImportRawCmd)
 	adminCmd.AddCommand(ksDeleteCmd)
 	adminCmd.AddCommand(ksGetCmd)
+	adminCmd.AddCommand(ksExportCmd)
+	adminCmd.AddCommand(ksRenameCmd)
 	adminCmd.AddCommand(txSendCmd)
 	adminCmd.AddCommand(txSendVestingCmd)
 	adminCmd.AddCommand(txStakeCmd)
@@ -57,6 +59,7 @@ func init() {
 	adminCmd.AddCommand(txUnpauseCmd)
 	adminCmd.AddCommand(txChangeParamCmd)
 	adminCmd.AddCommand(txDAOTransferCmd)
+	adminCmd.AddCommand(txChangeByzantineOutputCmd)
 	adminCmd.AddCommand(txSubsidyCmd)
 	adminCmd.AddCommand(txCreateOrderCmd)
 	adminCmd.AddCommand(txEditOrderCmd)
@@ -81,11 +84,11 @@ func init() {
 }
 
 var (
-	ksCmd = &cobra.Command{
-		Use:   "ks",
-		Short: "query the keystore of the node",
+	ksNicknamesCmd = &cobra.Command{
+		Use:   "ks-nicknames",
+		Short: "query the non-sensitive list of keys (address, nickname, public key) in the keystore",
 		Run: func(cmd *cobra.Command, args []string) {
-			writeToConsole(client.Keystore())
+			writeToConsole(client.KeystoreNicknames())
 		},
 	}
 
@@ -134,6 +137,24 @@ var (
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			writeToConsole(client.KeystoreGet(argGetAddrOrNickname(args[0]), getPassword()))
+		},
+	}
+
+	ksExportCmd = &cobra.Command{
+		Use:   "ks-export <address or nickname>",
+		Short: "export the encrypted keyfile for the address or nickname (requires password)",
+		Args:  cobra.MinimumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			writeToConsole(client.KeystoreExport(argGetAddrOrNickname(args[0]), getPassword()))
+		},
+	}
+
+	ksRenameCmd = &cobra.Command{
+		Use:   "ks-rename <address or nickname> <new-nickname>",
+		Short: "change the nickname associated with the address or nickname (requires password)",
+		Args:  cobra.MinimumNArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			writeToConsole(client.KeystoreRename(argGetAddrOrNickname(args[0]), args[1], getPassword()))
 		},
 	}
 
@@ -234,6 +255,24 @@ var (
 		Args:  cobra.MinimumNArgs(4),
 		Run: func(cmd *cobra.Command, args []string) {
 			writeTxResultToConsole(client.TxDaoTransfer(argGetAddrOrNickname(args[0]), uint64(argToInt(args[1])), uint64(argToInt(args[2])), uint64(argToInt(args[3])), getPassword(), !sim, fee, mint))
+		},
+	}
+
+	txChangeByzantineOutputCmd = &cobra.Command{
+		Use:   "tx-change-byzantine-output <proposer address or nickname> <validator address> <new output address> <proposal-start-block> <proposal-end-block> --fee=10000 --simulate=true",
+		Short: "propose redirecting the returned stake of an unstaking validator",
+		Args:  cobra.ExactArgs(5),
+		Run: func(cmd *cobra.Command, args []string) {
+			writeTxResultToConsole(client.TxChangeByzantineOutput(
+				argGetAddrOrNickname(args[0]),
+				argGetAddr(args[1]),
+				argGetAddr(args[2]),
+				uint64(argToInt(args[3])),
+				uint64(argToInt(args[4])),
+				getPassword(),
+				!sim,
+				fee,
+			))
 		},
 	}
 

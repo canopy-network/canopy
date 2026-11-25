@@ -44,9 +44,17 @@
       "coerce": { "ctx": { "height": "number" }, "body": { "height": "number" }, "response": { "amount": "number" }},
       "selector": "amount"
     },
-    "keystore": {
-      "source": { "base": "admin", "path": "/v1/admin/keystore", "method": "GET" },
+    "keystoreNicknames": {
+      "source": { "base": "admin", "path": "/v1/admin/keystore-nicknames", "method": "GET" },
       "selector": ""
+    },
+    "keystoreExport": {
+      "source": { "base": "admin", "path": "/v1/admin/keystore-export", "method": "POST" },
+      "body": { "address": "{{address}}", "password": "{{password}}", "nickname": "{{nickname}}" }
+    },
+    "keystoreRename": {
+      "source": { "base": "admin", "path": "/v1/admin/keystore-rename", "method": "POST" },
+      "body": { "address": "{{address}}", "newNickname": "{{newNickname}}", "password": "{{password}}" }
     },
     "keystoreNewKey": {
       "source": { "base": "admin", "path": "/v1/admin/keystore-new-key", "method": "POST" },
